@@ -1,33 +1,20 @@
-# EngHub Platform 1.0
+# EngHub 2.0
 
-Versão conectada ao Supabase.
+Versão limpa e corrigida para publicação na Vercel.
 
-## Funciona
-- Login e cadastro
+## Incluído
+
+- Login e cadastro com Supabase
 - Dashboard
 - Contratos
 - Medições
 - Aditivos
-- Documentos com upload privado
+- Documentos
 - Licitações
-- Dados multiusuário via Supabase
+- Upload para Supabase Storage
+- Middleware de autenticação
+- Banco Supabase já criado pelo usuário
 
-## Rodar
-```bash
-npm install
-npm run dev
-```
+## Build
 
-## Publicar
-1. Envie para GitHub privado.
-2. Importe na Vercel.
-3. Cadastre as variáveis:
-   - NEXT_PUBLIC_SUPABASE_URL
-   - NEXT_PUBLIC_SUPABASE_ANON_KEY
-4. Configure no Supabase:
-   - Authentication > URL Configuration
-   - Site URL da Vercel
-   - Redirect URL `https://SEU-PROJETO.vercel.app/**`
-
-## Observação
-A aplicação usa os nomes técnicos em inglês das tabelas. A interface do Supabase pode exibir rótulos traduzidos.
+O código passou na verificação do TypeScript e na compilação do Next.js.
