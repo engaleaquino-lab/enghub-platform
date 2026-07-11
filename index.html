@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EngHub</title>
+  <meta name="description" content="Gestão de contratos, medições e licitações para engenharia e construção civil." />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+
+  <section id="authView" class="auth-view">
+    <div class="auth-card">
+      <div class="brand">Eng<span>Hub</span></div>
+      <h1 id="authTitle">Entrar na plataforma</h1>
+      <p class="muted">Gestão prática para engenheiros, arquitetos e pequenas construtoras.</p>
+      <form id="authForm" class="stack">
+        <input id="authEmail" type="email" placeholder="Seu e-mail" required />
+        <input id="authPassword" type="password" placeholder="Sua senha" minlength="6" required />
+        <button class="btn" type="submit">Entrar</button>
+      </form>
+      <button id="toggleAuth" class="btn ghost">Criar conta</button>
+      <p id="authMessage" class="form-message"></p>
+    </div>
+  </section>
+
+  <div id="appView" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">Eng<span>Hub</span></div>
+      <nav>
+        <button data-page="dashboard" class="nav-btn active">Dashboard</button>
+        <button data-page="contracts" class="nav-btn">Contratos</button>
+        <button data-page="bids" class="nav-btn">Licitações</button>
+        <button data-page="knowledge" class="nav-btn">Conhecimento</button>
+      </nav>
+      <button id="logoutBtn" class="btn ghost">Sair</button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">Dashboard</h1>
+          <p id="pageSubtitle" class="muted">Visão geral da operação</p>
+        </div>
+        <span id="userBadge" class="badge">Conectado</span>
+      </header>
+
+      <section id="dashboardPage" class="page active">
+        <div class="kpi-grid">
+          <div class="card"><span>Valor contratado</span><strong id="kpiContract">R$ 0,00</strong></div>
+          <div class="card"><span>Valor medido</span><strong id="kpiMeasured">R$ 0,00</strong></div>
+          <div class="card"><span>Valor recebido</span><strong id="kpiReceived">R$ 0,00</strong></div>
+          <div class="card"><span>Licitações</span><strong id="kpiBids">0</strong></div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <h2>Contratos recentes</h2>
+            <div class="table-wrap"><table><thead><tr><th>Contrato</th><th>Órgão</th><th>Status</th></tr></thead><tbody id="dashContracts"></tbody></table></div>
+          </div>
+          <div class="panel">
+            <h2>Alertas</h2>
+            <div id="alerts" class="alerts"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="contractsPage" class="page">
+        <div class="section-head"><div><h2>Contratos</h2><p class="muted">Cadastre e acompanhe contratos ganhos.</p></div><button id="newContractBtn" class="btn">Novo contrato</button></div>
+        <div class="panel"><div class="table-wrap"><table><thead><tr><th>Contrato</th><th>Objeto</th><th>Valor</th><th>Medido</th><th>Recebido</th><th>Status</th><th></th></tr></thead><tbody id="contractsBody"></tbody></table></div></div>
+      </section>
+
+      <section id="contractDetailPage" class="page">
+        <div class="section-head"><div><button id="backContracts" class="link-btn">← Voltar</button><h2 id="detailTitle">Contrato</h2><p id="detailSubtitle" class="muted"></p></div></div>
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="summary">Resumo</button>
+          <button class="tab-btn" data-tab="measurements">Medições</button>
+          <button class="tab-btn" data-tab="addenda">Aditivos</button>
+          <button class="tab-btn" data-tab="documents">Documentos</button>
+        </div>
+
+        <div id="summaryTab" class="tab-panel active">
+          <div class="kpi-grid">
+            <div class="card"><span>Valor original</span><strong id="detailOriginal">R$ 0,00</strong></div>
+            <div class="card"><span>Com aditivos</span><strong id="detailAdjusted">R$ 0,00</strong></div>
+            <div class="card"><span>Medido</span><strong id="detailMeasured">R$ 0,00</strong></div>
+            <div class="card"><span>Recebido</span><strong id="detailReceived">R$ 0,00</strong></div>
+          </div>
+        </div>
+
+        <div id="measurementsTab" class="tab-panel">
+          <div class="section-head"><h3>Medições</h3><button id="newMeasurementBtn" class="btn">Nova medição</button></div>
+          <div class="panel"><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Competência</th><th>Medido</th><th>NF</th><th>Status</th><th>Recebido</th><th></th></tr></thead><tbody id="measurementsBody"></tbody></table></div></div>
+        </div>
+
+        <div id="addendaTab" class="tab-panel">
+          <div class="section-head"><h3>Aditivos</h3><button id="newAddendumBtn" class="btn">Novo aditivo</button></div>
+          <div class="panel"><div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Dias</th><th>Status</th><th></th></tr></thead><tbody id="addendaBody"></tbody></table></div></div>
+        </div>
+
+        <div id="documentsTab" class="tab-panel">
+          <div class="section-head"><h3>Documentos</h3><label class="btn file-btn">Enviar arquivo<input id="documentFile" type="file" hidden /></label></div>
+          <div class="panel"><div class="table-wrap"><table><thead><tr><th>Arquivo</th><th>Categoria</th><th>Status</th><th>Data</th><th></th></tr></thead><tbody id="documentsBody"></tbody></table></div></div>
+        </div>
+      </section>
+
+      <section id="bidsPage" class="page">
+        <div class="section-head"><div><h2>Licitações</h2><p class="muted">Controle editais, prazos e decisões de participação.</p></div><button id="newBidBtn" class="btn">Nova licitação</button></div>
+        <div class="panel"><div class="table-wrap"><table><thead><tr><th>Objeto</th><th>Órgão</th><th>Sessão</th><th>Valor estimado</th><th>Status</th><th></th></tr></thead><tbody id="bidsBody"></tbody></table></div></div>
+      </section>
+
+      <section id="knowledgePage" class="page">
+        <div class="section-head"><div><h2>Central de Conhecimento</h2><p class="muted">Conteúdo inicial para gestão e licitações.</p></div></div>
+        <div class="knowledge-grid">
+          <article class="panel"><h3>Primeira licitação</h3><p>Organize empresa, documentos, portais, proposta e acompanhamento da sessão.</p></article>
+          <article class="panel"><h3>Leitura de edital</h3><p>Confira objeto, habilitação, qualificação técnica, prazos, planilha e contrato.</p></article>
+          <article class="panel"><h3>Medição de obra</h3><p>Registre quantitativos, memória de cálculo, aprovação, nota fiscal e recebimento.</p></article>
+          <article class="panel"><h3>Aditivos</h3><p>Controle origem, impacto, solicitação, formalização e vínculo com as medições.</p></article>
+          <article class="panel"><h3>Fluxo de caixa</h3><p>Separe previsto e realizado, acompanhe vencimentos e resultados por obra.</p></article>
+          <article class="panel"><h3>Cobrança de pagamento</h3><p>Monte uma linha do tempo com contrato, medição, nota fiscal e protocolos.</p></article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h2 id="modalTitle">Novo registro</h2><button id="closeModal" class="close-btn">×</button></div>
+      <form id="modalForm" class="form-grid"></form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
