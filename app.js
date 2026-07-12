@@ -1,158 +1,34 @@
-const SUPABASE_URL='https://pdemjgsjhuuaoevhrewm.supabase.co';
-const SUPABASE_KEY='sb_publishable_BJom2NIB22-MKQJ0mRi3GQ_Yv-IS0-r';
+"use strict";
+const SUPABASE_URL="https://pdemjgsjhuuaoevhrewm.supabase.co";
+const SUPABASE_KEY="sb_publishable_BJom2NIB22-MKQJ0mRi3GQ_Yv-IS0-r";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-
-let authMode='login';
-let currentUser=null;
-let currentOrgId=null;
-let contracts=[];
-let bids=[];
-let currentContract=null;
-
+let isSignup=false,currentUser=null,currentOrg=null,currentContract=null;
 const $=id=>document.getElementById(id);
-const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const dateBR=v=>v?new Date(v+'T12:00:00').toLocaleDateString('pt-BR'):'—';
-function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
-function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-
-async function ensureOrganization(){
-  const {data,error}=await db.from('organization_members').select('organization_id').eq('user_id',currentUser.id).eq('status','active').limit(1).maybeSingle();
-  if(error) throw error;
-  if(data){currentOrgId=data.organization_id;return}
-  // fallback for accounts created before trigger existed
-  const {data:org,error:orgErr}=await db.from('organizations').insert({name:'Minha Empresa',created_by:currentUser.id}).select().single();
-  if(orgErr) throw orgErr;
-  const {error:memErr}=await db.from('organization_members').insert({organization_id:org.id,user_id:currentUser.id,role:'owner',status:'active'});
-  if(memErr) throw memErr;
-  currentOrgId=org.id;
-}
-
-async function init(){
-  const {data:{session}}=await db.auth.getSession();
-  if(session){currentUser=session.user;await startApp()}else showAuth();
-}
-
-function showAuth(){$('authView').classList.remove('hidden');$('appView').classList.add('hidden')}
-async function startApp(){
-  try{
-    await ensureOrganization();
-    $('authView').classList.add('hidden');$('appView').classList.remove('hidden');
-    $('userBadge').textContent=currentUser.email||'Conectado';
-    await refreshAll();
-  }catch(e){$('authMessage').textContent=e.message;showAuth()}
-}
-
-$('authForm').addEventListener('submit',async e=>{
-  e.preventDefault();$('authMessage').textContent='Aguarde...';
-  const email=$('authEmail').value.trim();const password=$('authPassword').value;
-  const result=authMode==='login'?await db.auth.signInWithPassword({email,password}):await db.auth.signUp({email,password});
-  if(result.error){$('authMessage').textContent=result.error.message;return}
-  if(authMode==='signup'&&!result.data.session){$('authMessage').textContent='Cadastro criado. Confirme seu e-mail e depois entre.';return}
-  currentUser=result.data.user;await startApp();
-});
-$('toggleAuth').addEventListener('click',()=>{
-  authMode=authMode==='login'?'signup':'login';
-  $('authTitle').textContent=authMode==='login'?'Entrar na plataforma':'Criar sua conta';
-  $('authForm').querySelector('button').textContent=authMode==='login'?'Entrar':'Cadastrar';
-  $('toggleAuth').textContent=authMode==='login'?'Criar conta':'Já tenho conta';
-  $('authMessage').textContent='';
-});
-$('logoutBtn').addEventListener('click',async()=>{await db.auth.signOut();location.reload()});
-
-const pageMeta={dashboard:['Dashboard','Visão geral da operação'],contracts:['Contratos','Gestão dos contratos ganhos'],bids:['Licitações','Editais, prazos e oportunidades'],knowledge:['Central de Conhecimento','Guias e materiais práticos']};
-document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
-function showPage(name){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===name));
-  $(`${name}Page`).classList.add('active');
-  $('pageTitle').textContent=pageMeta[name][0];$('pageSubtitle').textContent=pageMeta[name][1];
-}
-
-async function refreshAll(){await Promise.all([loadContracts(),loadBids()]);renderDashboard()}
-async function loadContracts(){
-  const {data,error}=await db.from('contracts').select('*').order('created_at',{ascending:false});if(error)throw error;contracts=data||[];renderContracts();
-}
-async function loadBids(){
-  const {data,error}=await db.from('bids').select('*').order('created_at',{ascending:false});if(error)throw error;bids=data||[];renderBids();
-}
-function renderDashboard(){
-  const total=k=>contracts.reduce((a,c)=>a+Number(c[k]||0),0);
-  $('kpiContract').textContent=money(total('contract_value'));$('kpiMeasured').textContent=money(total('measured_value'));$('kpiReceived').textContent=money(total('received_value'));$('kpiBids').textContent=bids.length;
-  $('dashContracts').innerHTML=contracts.slice(0,6).map(c=>`<tr><td>${esc(c.contract_number)}</td><td>${esc(c.client_name)}</td><td>${esc(c.status)}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum contrato cadastrado.</td></tr>';
-  const pending=Math.max(0,total('measured_value')-total('received_value'));
-  $('alerts').innerHTML=`<div class="alert">${money(pending)} medidos e ainda não recebidos.</div><div class="alert">${contracts.length} contrato(s) cadastrado(s).</div><div class="alert">${bids.length} licitação(ões) acompanhada(s).</div>`;
-}
-function renderContracts(){
-  $('contractsBody').innerHTML=contracts.map(c=>`<tr><td><button class="link-btn" onclick="openContract('${c.id}')">${esc(c.contract_number)}</button></td><td>${esc(c.object)}</td><td>${money(c.contract_value)}</td><td>${money(c.measured_value)}</td><td>${money(c.received_value)}</td><td>${esc(c.status)}</td><td><button class="danger" onclick="deleteContract('${c.id}')">Excluir</button></td></tr>`).join('')||'<tr><td colspan="7">Nenhum contrato cadastrado.</td></tr>';
-}
-function renderBids(){
-  $('bidsBody').innerHTML=bids.map(b=>`<tr><td>${esc(b.title)}</td><td>${esc(b.agency)}</td><td>${dateBR((b.session_date||'').slice(0,10))}</td><td>${money(b.estimated_value)}</td><td>${esc(b.status)}</td><td><button class="danger" onclick="deleteBid('${b.id}')">Excluir</button></td></tr>`).join('')||'<tr><td colspan="6">Nenhuma licitação cadastrada.</td></tr>';
-}
-
-function openModal(title,fields,onSubmit){
-  $('modalTitle').textContent=title;const form=$('modalForm');form.innerHTML=fields;form.onsubmit=async e=>{e.preventDefault();try{await onSubmit(new FormData(form));closeModal();toast('Salvo com sucesso.')}catch(err){toast(err.message)}};$('modal').classList.remove('hidden');
-}
-function closeModal(){$('modal').classList.add('hidden');$('modalForm').innerHTML=''}
-$('closeModal').addEventListener('click',closeModal);$('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeModal()});
-
-$('newContractBtn').addEventListener('click',()=>openModal('Novo contrato',`
-<label>Número<input name="number" required></label><label>Órgão/Cliente<input name="client" required></label><label class="full">Objeto<input name="object" required></label><label>Valor<input name="value" type="number" step="0.01" required></label><label>Status<select name="status"><option>Planejamento</option><option>Em execução</option><option>Paralisado</option><option>Concluído</option></select></label><button class="btn full">Salvar</button>`,async f=>{
-  const {error}=await db.from('contracts').insert({organization_id:currentOrgId,created_by:currentUser.id,contract_number:f.get('number'),client_name:f.get('client'),object:f.get('object'),contract_value:Number(f.get('value')||0),measured_value:0,received_value:0,status:f.get('status')});if(error)throw error;await loadContracts();renderDashboard();
-}));
-window.deleteContract=async id=>{if(!confirm('Excluir este contrato?'))return;const {error}=await db.from('contracts').delete().eq('id',id);if(error)return toast(error.message);await loadContracts();renderDashboard()};
-
-$('newBidBtn').addEventListener('click',()=>openModal('Nova licitação',`
-<label class="full">Objeto<input name="title" required></label><label class="full">Órgão<input name="agency" required></label><label>Data da sessão<input name="date" type="date"></label><label>Valor estimado<input name="value" type="number" step="0.01"></label><label class="full">Status<select name="status"><option>Em análise</option><option>Participar</option><option>Não participar</option><option>Proposta enviada</option><option>Vencida</option><option>Perdida</option></select></label><button class="btn full">Salvar</button>`,async f=>{
-  const {error}=await db.from('bids').insert({organization_id:currentOrgId,created_by:currentUser.id,title:f.get('title'),agency:f.get('agency'),session_date:f.get('date')||null,estimated_value:Number(f.get('value')||0),status:f.get('status')});if(error)throw error;await loadBids();renderDashboard();
-}));
-window.deleteBid=async id=>{if(!confirm('Excluir esta licitação?'))return;const {error}=await db.from('bids').delete().eq('id',id);if(error)return toast(error.message);await loadBids();renderDashboard()};
-
-window.openContract=async id=>{
-  currentContract=contracts.find(c=>c.id===id);if(!currentContract)return;
-  $('contractsPage').classList.remove('active');$('contractDetailPage').classList.add('active');
-  $('detailTitle').textContent=`Contrato ${currentContract.contract_number}`;$('detailSubtitle').textContent=currentContract.object||'';
-  await refreshContractDetail();
-};
-$('backContracts').addEventListener('click',()=>{$('contractDetailPage').classList.remove('active');$('contractsPage').classList.add('active')});
-document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(`${b.dataset.tab}Tab`).classList.add('active');
-}));
-async function refreshContractDetail(){
-  const [{data:ms,error:me},{data:ads,error:ae},{data:docs,error:de}]=await Promise.all([
-    db.from('measurements').select('*').eq('contract_id',currentContract.id).order('created_at',{ascending:false}),
-    db.from('addenda').select('*').eq('contract_id',currentContract.id).order('created_at',{ascending:false}),
-    db.from('contract_documents').select('*').eq('contract_id',currentContract.id).order('created_at',{ascending:false})
-  ]);if(me||ae||de)throw(me||ae||de);
-  const adjusted=Number(currentContract.contract_value||0)+(ads||[]).reduce((a,x)=>a+Number(x.value||0),0);
-  $('detailOriginal').textContent=money(currentContract.contract_value);$('detailAdjusted').textContent=money(adjusted);$('detailMeasured').textContent=money(currentContract.measured_value);$('detailReceived').textContent=money(currentContract.received_value);
-  $('measurementsBody').innerHTML=(ms||[]).map(m=>`<tr><td>${esc(m.number)}</td><td>${esc(m.competence)}</td><td>${money(m.measured_value)}</td><td>${esc(m.invoice_number)}</td><td>${esc(m.status)}</td><td>${money(m.received_value)}</td><td><button class="danger" onclick="deleteMeasurement('${m.id}')">Excluir</button></td></tr>`).join('')||'<tr><td colspan="7">Nenhuma medição.</td></tr>';
-  $('addendaBody').innerHTML=(ads||[]).map(a=>`<tr><td>${esc(a.type)}</td><td>${esc(a.description)}</td><td>${money(a.value)}</td><td>${a.days||0}</td><td>${esc(a.status)}</td><td><button class="danger" onclick="deleteAddendum('${a.id}')">Excluir</button></td></tr>`).join('')||'<tr><td colspan="6">Nenhum aditivo.</td></tr>';
-  $('documentsBody').innerHTML=(docs||[]).map(d=>`<tr><td>${esc(d.name)}</td><td>${esc(d.category)}</td><td>${esc(d.status)}</td><td>${new Date(d.created_at).toLocaleDateString('pt-BR')}</td><td><button class="danger" onclick="deleteDocument('${d.id}','${esc(d.storage_path||'')}')">Excluir</button></td></tr>`).join('')||'<tr><td colspan="5">Nenhum documento.</td></tr>';
-}
-async function syncContractTotals(){
-  const {data,error}=await db.from('measurements').select('measured_value,received_value').eq('contract_id',currentContract.id);if(error)throw error;
-  const measured=(data||[]).reduce((a,x)=>a+Number(x.measured_value||0),0),received=(data||[]).reduce((a,x)=>a+Number(x.received_value||0),0);
-  const {error:e}=await db.from('contracts').update({measured_value:measured,received_value:received}).eq('id',currentContract.id);if(e)throw e;
-  currentContract.measured_value=measured;currentContract.received_value=received;await loadContracts();renderDashboard();
-}
-$('newMeasurementBtn').addEventListener('click',()=>openModal('Nova medição',`
-<label>Número<input name="number"></label><label>Competência<input name="competence"></label><label>Valor medido<input name="measured" type="number" step="0.01"></label><label>Nota fiscal<input name="invoice"></label><label>Valor recebido<input name="received" type="number" step="0.01"></label><label>Status<select name="status"><option>Em elaboração</option><option>Protocolada</option><option>Aprovada</option><option>Faturada</option><option>Recebida</option><option>Glosada</option></select></label><button class="btn full">Salvar</button>`,async f=>{
-  const {error}=await db.from('measurements').insert({organization_id:currentOrgId,created_by:currentUser.id,contract_id:currentContract.id,number:f.get('number'),competence:f.get('competence'),measured_value:Number(f.get('measured')||0),invoice_number:f.get('invoice'),status:f.get('status'),received_value:Number(f.get('received')||0)});if(error)throw error;await syncContractTotals();await refreshContractDetail();
-}));
-window.deleteMeasurement=async id=>{if(!confirm('Excluir medição?'))return;const {error}=await db.from('measurements').delete().eq('id',id);if(error)return toast(error.message);await syncContractTotals();await refreshContractDetail()};
-
-$('newAddendumBtn').addEventListener('click',()=>openModal('Novo aditivo',`
-<label>Tipo<select name="type"><option>Valor</option><option>Prazo</option><option>Valor e Prazo</option><option>Supressão</option></select></label><label>Status<select name="status"><option>Identificado</option><option>Solicitado</option><option>Em análise</option><option>Aprovado</option><option>Formalizado</option></select></label><label class="full">Descrição<input name="description"></label><label>Valor<input name="value" type="number" step="0.01"></label><label>Dias<input name="days" type="number"></label><button class="btn full">Salvar</button>`,async f=>{
-  const {error}=await db.from('addenda').insert({organization_id:currentOrgId,created_by:currentUser.id,contract_id:currentContract.id,type:f.get('type'),description:f.get('description'),value:Number(f.get('value')||0),days:Number(f.get('days')||0),status:f.get('status')});if(error)throw error;await refreshContractDetail();
-}));
-window.deleteAddendum=async id=>{if(!confirm('Excluir aditivo?'))return;const {error}=await db.from('addenda').delete().eq('id',id);if(error)return toast(error.message);await refreshContractDetail()};
-
-$('documentFile').addEventListener('change',async e=>{
-  const file=e.target.files[0];if(!file||!currentContract)return;
-  try{toast('Enviando arquivo...');const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=`${currentOrgId}/${currentContract.id}/${crypto.randomUUID()}-${safe}`;const {error:up}=await db.storage.from('contract-files').upload(path,file);if(up)throw up;
-    const {error}=await db.from('contract_documents').insert({organization_id:currentOrgId,created_by:currentUser.id,contract_id:currentContract.id,name:file.name,category:'Arquivo',status:'Válido',storage_path:path});if(error)throw error;toast('Arquivo enviado.');await refreshContractDetail();
-  }catch(err){toast(err.message)}finally{e.target.value=''}
-});
-window.deleteDocument=async(id,path)=>{if(!confirm('Excluir documento?'))return;if(path)await db.storage.from('contract-files').remove([path]);const {error}=await db.from('contract_documents').delete().eq('id',id);if(error)return toast(error.message);await refreshContractDetail()};
-
-init();
+const money=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+function toast(msg){const el=$("toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),3000)}
+function showAuth(){$("authView").classList.remove("hidden");$("appView").classList.add("hidden")}
+function showApp(){$("authView").classList.add("hidden");$("appView").classList.remove("hidden")}
+async function orgId(){if(currentOrg)return currentOrg;const {data,error}=await db.from("organization_members").select("organization_id").eq("user_id",currentUser.id).eq("status","active").limit(1).single();if(error)throw error;currentOrg=data.organization_id;return currentOrg}
+async function authSubmit(e){e.preventDefault();const email=$("authEmail").value.trim(),password=$("authPassword").value;$("authMessage").textContent="Aguarde...";const result=isSignup?await db.auth.signUp({email,password}):await db.auth.signInWithPassword({email,password});if(result.error){$("authMessage").textContent=result.error.message;return}if(isSignup&&!result.data.session){$("authMessage").textContent="Conta criada. Confirme seu e-mail e depois entre.";return}currentUser=result.data.user;$("userBadge").textContent=email;showApp();await loadAll()}
+function toggleAuth(){isSignup=!isSignup;$("authTitle").textContent=isSignup?"Criar conta":"Entrar na plataforma";$("authSubmit").textContent=isSignup?"Cadastrar":"Entrar";$("toggleAuth").textContent=isSignup?"Já tenho conta":"Criar conta";$("authMessage").textContent=""}
+async function logout(){await db.auth.signOut();currentUser=null;currentOrg=null;showAuth()}
+function page(name){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".nav-btn").forEach(x=>x.classList.toggle("active",x.dataset.page===name));$(name+"Page").classList.add("active");const titles={dashboard:["Dashboard","Visão geral da operação"],contracts:["Contratos","Gestão dos contratos ganhos"],bids:["Licitações","Editais e prazos"],knowledge:["Conhecimento","Guias práticos"]};$("pageTitle").textContent=titles[name][0];$("pageSubtitle").textContent=titles[name][1];if(name==="dashboard")loadDashboard();if(name==="contracts")loadContracts();if(name==="bids")loadBids()}
+async function loadAll(){await Promise.all([loadDashboard(),loadContracts(),loadBids()])}
+async function loadDashboard(){const [{data:contracts,error:ce},{data:bids,error:be}]=await Promise.all([db.from("contracts").select("*").order("created_at",{ascending:false}),db.from("bids").select("*").order("created_at",{ascending:false})]);if(ce||be){toast((ce||be).message);return}const t=(contracts||[]).reduce((a,c)=>({contract:a.contract+Number(c.contract_value||0),measured:a.measured+Number(c.measured_value||0),received:a.received+Number(c.received_value||0)}),{contract:0,measured:0,received:0});$("kpiContract").textContent=money(t.contract);$("kpiMeasured").textContent=money(t.measured);$("kpiReceived").textContent=money(t.received);$("kpiBids").textContent=String((bids||[]).length);$("dashContracts").innerHTML=(contracts||[]).slice(0,6).map(c=>`<tr><td>${esc(c.contract_number)}</td><td>${esc(c.client_name)}</td><td>${esc(c.status)}</td></tr>`).join("")||'<tr><td colspan="3">Nenhum contrato cadastrado.</td></tr>';const pending=Math.max(0,t.measured-t.received);$("alerts").innerHTML=`<div class="alert">${money(pending)} medidos e não recebidos</div><div class="alert">${(contracts||[]).length} contrato(s) cadastrado(s)</div>`}
+async function loadContracts(){const {data,error}=await db.from("contracts").select("*").order("created_at",{ascending:false});if(error){toast(error.message);return}$("contractsBody").innerHTML=(data||[]).map(c=>`<tr><td><button class="link-btn open-contract" data-id="${c.id}">${esc(c.contract_number)}</button></td><td>${esc(c.object)}</td><td>${money(c.contract_value)}</td><td>${money(c.measured_value)}</td><td>${money(c.received_value)}</td><td>${esc(c.status)}</td><td><button class="btn danger delete-contract" data-id="${c.id}">Excluir</button></td></tr>`).join("")||'<tr><td colspan="7">Nenhum contrato cadastrado.</td></tr>';document.querySelectorAll(".open-contract").forEach(b=>b.onclick=()=>openContract(b.dataset.id));document.querySelectorAll(".delete-contract").forEach(b=>b.onclick=()=>deleteRow("contracts",b.dataset.id,loadContracts))}
+async function loadBids(){const {data,error}=await db.from("bids").select("*").order("session_date",{ascending:true});if(error){toast(error.message);return}$("bidsBody").innerHTML=(data||[]).map(b=>`<tr><td>${esc(b.title)}</td><td>${esc(b.agency)}</td><td>${b.session_date?new Date(b.session_date).toLocaleDateString("pt-BR"):"—"}</td><td>${money(b.estimated_value)}</td><td>${esc(b.status)}</td><td><button class="btn danger delete-bid" data-id="${b.id}">Excluir</button></td></tr>`).join("")||'<tr><td colspan="6">Nenhuma licitação cadastrada.</td></tr>';document.querySelectorAll(".delete-bid").forEach(b=>b.onclick=()=>deleteRow("bids",b.dataset.id,loadBids))}
+async function deleteRow(table,id,reload){if(!confirm("Excluir este registro?"))return;const {error}=await db.from(table).delete().eq("id",id);if(error)toast(error.message);else{toast("Registro excluído.");await reload();await loadDashboard()}}
+function modal(title,fields,onSubmit){$("modalTitle").textContent=title;$("modalForm").innerHTML=fields;$("modalForm").onsubmit=onSubmit;$("modal").classList.remove("hidden")}
+function closeModal(){$("modal").classList.add("hidden")}
+async function newContract(){modal("Novo contrato",`<input name="number" placeholder="Número" required><input name="client" placeholder="Órgão/Cliente" required><input class="full" name="object" placeholder="Objeto" required><input name="value" type="number" step="0.01" placeholder="Valor" required><select name="status"><option>Planejamento</option><option>Em execução</option><option>Paralisado</option><option>Concluído</option></select><button class="btn full">Salvar</button>`,async e=>{e.preventDefault();const f=new FormData(e.target),org=await orgId();const {error}=await db.from("contracts").insert({organization_id:org,created_by:currentUser.id,contract_number:f.get("number"),client_name:f.get("client"),object:f.get("object"),contract_value:Number(f.get("value")),measured_value:0,received_value:0,status:f.get("status")});if(error)toast(error.message);else{closeModal();toast("Contrato criado.");await loadContracts();await loadDashboard()}})}
+async function newBid(){modal("Nova licitação",`<input class="full" name="title" placeholder="Objeto" required><input class="full" name="agency" placeholder="Órgão" required><input name="date" type="date"><input name="value" type="number" step="0.01" placeholder="Valor estimado"><select class="full" name="status"><option>Em análise</option><option>Participar</option><option>Não participar</option><option>Proposta enviada</option><option>Vencida</option><option>Perdida</option></select><button class="btn full">Salvar</button>`,async e=>{e.preventDefault();const f=new FormData(e.target),org=await orgId();const {error}=await db.from("bids").insert({organization_id:org,created_by:currentUser.id,title:f.get("title"),agency:f.get("agency"),session_date:f.get("date")||null,estimated_value:Number(f.get("value")||0),status:f.get("status")});if(error)toast(error.message);else{closeModal();toast("Licitação criada.");await loadBids();await loadDashboard()}})}
+async function openContract(id){const {data,error}=await db.from("contracts").select("*").eq("id",id).single();if(error){toast(error.message);return}currentContract=data;document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$("contractDetailPage").classList.add("active");$("pageTitle").textContent="Contrato";$("detailTitle").textContent=`Contrato ${data.contract_number}`;$("detailSubtitle").textContent=data.object||"";await refreshDetail()}
+async function refreshDetail(){if(!currentContract)return;const [{data:m},{data:a},{data:d}]=await Promise.all([db.from("measurements").select("*").eq("contract_id",currentContract.id).order("created_at",{ascending:false}),db.from("addenda").select("*").eq("contract_id",currentContract.id).order("created_at",{ascending:false}),db.from("contract_documents").select("*").eq("contract_id",currentContract.id).order("created_at",{ascending:false})]);const measured=(m||[]).reduce((s,x)=>s+Number(x.measured_value||0),0),received=(m||[]).reduce((s,x)=>s+Number(x.received_value||0),0),add=(a||[]).reduce((s,x)=>s+Number(x.value||0),0);await db.from("contracts").update({measured_value:measured,received_value:received}).eq("id",currentContract.id);currentContract.measured_value=measured;currentContract.received_value=received;$("detailOriginal").textContent=money(currentContract.contract_value);$("detailAdjusted").textContent=money(Number(currentContract.contract_value)+add);$("detailMeasured").textContent=money(measured);$("detailReceived").textContent=money(received);$("measurementsBody").innerHTML=(m||[]).map(x=>`<tr><td>${esc(x.number)}</td><td>${esc(x.competence)}</td><td>${money(x.measured_value)}</td><td>${esc(x.invoice_number)}</td><td>${esc(x.status)}</td><td>${money(x.received_value)}</td><td><button class="btn danger del-m" data-id="${x.id}">Excluir</button></td></tr>`).join("")||'<tr><td colspan="7">Nenhuma medição.</td></tr>';$("addendaBody").innerHTML=(a||[]).map(x=>`<tr><td>${esc(x.type)}</td><td>${esc(x.description)}</td><td>${money(x.value)}</td><td>${Number(x.days||0)}</td><td>${esc(x.status)}</td><td><button class="btn danger del-a" data-id="${x.id}">Excluir</button></td></tr>`).join("")||'<tr><td colspan="6">Nenhum aditivo.</td></tr>';$("documentsBody").innerHTML=(d||[]).map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.category)}</td><td>${esc(x.status)}</td><td>${new Date(x.created_at).toLocaleDateString("pt-BR")}</td><td><button class="btn danger del-d" data-id="${x.id}">Excluir</button></td></tr>`).join("")||'<tr><td colspan="5">Nenhum documento.</td></tr>';document.querySelectorAll(".del-m").forEach(b=>b.onclick=()=>deleteDetail("measurements",b.dataset.id));document.querySelectorAll(".del-a").forEach(b=>b.onclick=()=>deleteDetail("addenda",b.dataset.id));document.querySelectorAll(".del-d").forEach(b=>b.onclick=()=>deleteDetail("contract_documents",b.dataset.id));await loadDashboard()}
+async function deleteDetail(table,id){if(!confirm("Excluir este registro?"))return;const {error}=await db.from(table).delete().eq("id",id);if(error)toast(error.message);else await refreshDetail()}
+async function newMeasurement(){modal("Nova medição",`<input name="number" placeholder="Número"><input name="competence" placeholder="Competência"><input name="measured" type="number" step="0.01" placeholder="Valor medido"><input name="invoice" placeholder="Nota fiscal"><input name="received" type="number" step="0.01" placeholder="Valor recebido"><select name="status"><option>Em elaboração</option><option>Protocolada</option><option>Aprovada</option><option>Faturada</option><option>Recebida</option><option>Glosada</option></select><button class="btn full">Salvar</button>`,async e=>{e.preventDefault();const f=new FormData(e.target),org=await orgId();const {error}=await db.from("measurements").insert({organization_id:org,created_by:currentUser.id,contract_id:currentContract.id,number:f.get("number"),competence:f.get("competence"),measured_value:Number(f.get("measured")||0),invoice_number:f.get("invoice"),received_value:Number(f.get("received")||0),status:f.get("status")});if(error)toast(error.message);else{closeModal();await refreshDetail()}})}
+async function newAddendum(){modal("Novo aditivo",`<select name="type"><option>Valor</option><option>Prazo</option><option>Valor e Prazo</option><option>Supressão</option></select><select name="status"><option>Identificado</option><option>Solicitado</option><option>Em análise</option><option>Aprovado</option><option>Formalizado</option></select><input class="full" name="description" placeholder="Descrição"><input name="value" type="number" step="0.01" placeholder="Valor"><input name="days" type="number" placeholder="Dias"><button class="btn full">Salvar</button>`,async e=>{e.preventDefault();const f=new FormData(e.target),org=await orgId();const {error}=await db.from("addenda").insert({organization_id:org,created_by:currentUser.id,contract_id:currentContract.id,type:f.get("type"),status:f.get("status"),description:f.get("description"),value:Number(f.get("value")||0),days:Number(f.get("days")||0)});if(error)toast(error.message);else{closeModal();await refreshDetail()}})}
+async function uploadDocument(file){if(!currentContract||!file)return;try{const org=await orgId(),safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"_"),path=`${org}/${currentContract.id}/${crypto.randomUUID()}-${safe}`;let {error}=await db.storage.from("contract-files").upload(path,file);if(error)throw error;({error}=await db.from("contract_documents").insert({organization_id:org,created_by:currentUser.id,contract_id:currentContract.id,name:file.name,category:"Arquivo",status:"Válido",storage_path:path}));if(error)throw error;toast("Arquivo enviado.");await refreshDetail()}catch(e){toast(e.message||"Falha no upload.")}}
+function tab(name){document.querySelectorAll(".tab-btn").forEach(x=>x.classList.toggle("active",x.dataset.tab===name));document.querySelectorAll(".tab-panel").forEach(x=>x.classList.remove("active"));$(name+"Tab").classList.add("active")}
+async function init(){const {data:{session}}=await db.auth.getSession();if(session){currentUser=session.user;$("userBadge").textContent=session.user.email||"Conectado";showApp();await loadAll()}else showAuth();$("authForm").addEventListener("submit",authSubmit);$("toggleAuth").onclick=toggleAuth;$("logoutBtn").onclick=logout;document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>page(b.dataset.page));$("newContractBtn").onclick=newContract;$("newBidBtn").onclick=newBid;$("backContracts").onclick=()=>page("contracts");$("newMeasurementBtn").onclick=newMeasurement;$("newAddendumBtn").onclick=newAddendum;$("documentFile").onchange=e=>uploadDocument(e.target.files[0]);$("closeModal").onclick=closeModal;$("modal").onclick=e=>{if(e.target===$("modal"))closeModal()};document.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>tab(b.dataset.tab));db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT")showAuth();if(session)currentUser=session.user})}
+window.addEventListener("DOMContentLoaded",init);
