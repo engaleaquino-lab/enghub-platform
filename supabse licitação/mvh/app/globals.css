@@ -137,3 +137,35 @@ select.input{appearance:auto}
 .library-summary{white-space:pre-wrap;line-height:1.55;color:#dce8f0}
 @media(max-width:1000px){.library-grid{grid-template-columns:repeat(2,1fr)}.library-alert-list{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.library-toolbar,.library-grid,.library-alert-list{grid-template-columns:1fr}}
+
+
+/* Sprint 05 — Copiloto conectado aos dados reais */
+.copilot-workspace{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;min-height:calc(100vh - 120px)}
+.copilot-history{background:linear-gradient(180deg,var(--panel),#081724);border:1px solid var(--border);border-radius:10px;padding:14px;min-height:680px}
+.copilot-new{width:100%;justify-content:center;margin-bottom:12px}
+.copilot-history-list{display:grid;gap:8px;max-height:610px;overflow:auto}
+.copilot-history-row{display:grid;grid-template-columns:minmax(0,1fr) 32px;align-items:stretch;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#071827}
+.copilot-history-row.active{border-color:var(--green);background:#0b2b34}
+.copilot-history-open{display:grid;gap:5px;padding:11px;color:var(--text);background:transparent;border:0;text-align:left;cursor:pointer;min-width:0}
+.copilot-history-open strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copilot-history-open span{font-size:11px;color:var(--muted)}
+.copilot-history-delete{border:0;border-left:1px solid var(--border);background:transparent;color:#fca5a5;cursor:pointer;font-size:20px}
+.copilot-persistent-card{min-height:680px;display:grid;grid-template-rows:auto minmax(350px,1fr) auto auto auto;overflow:hidden}
+.copilot-conversation-title{padding:14px 16px;border-bottom:1px solid var(--border)}
+.copilot-conversation-title div{display:grid;gap:4px}
+.copilot-messages{padding:18px;display:flex;flex-direction:column;gap:13px;overflow:auto;max-height:560px}
+.copilot-message{max-width:86%;padding:13px 15px;border-radius:12px;line-height:1.55;white-space:pre-wrap}
+.copilot-message.user{align-self:flex-end;background:var(--green);color:#032017;border-bottom-right-radius:4px}
+.copilot-message.assistant{align-self:flex-start;background:#071827;border:1px solid var(--border);border-bottom-left-radius:4px}
+.copilot-message-content{white-space:pre-wrap}
+.copilot-sources{display:grid;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:#cbd5e1}
+.copilot-sources details{background:#06121f;border:1px solid var(--border);border-radius:7px;padding:8px 10px}
+.copilot-sources summary{cursor:pointer;color:var(--green);font-weight:800}
+.copilot-sources p{margin:8px 0 0;color:#b8c7d3}
+.copilot-suggestions{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 12px}
+.copilot-chip{border:0;cursor:pointer}
+.copilot-form{padding:14px 16px 16px;border-top:1px solid var(--border)}
+.copilot-textarea{min-height:92px;resize:vertical}
+.copilot-form-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:9px}
+@media(max-width:980px){.copilot-workspace{grid-template-columns:1fr}.copilot-history{min-height:auto}.copilot-history-list{max-height:230px}}
+@media(max-width:600px){.copilot-message{max-width:96%}}
