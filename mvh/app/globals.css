@@ -121,3 +121,116 @@ select.input{appearance:auto}
 .negative{color:#fca5a5}
 .data-card{margin-top:18px;overflow:auto}
 .data-link{color:var(--green);font-weight:800}
+
+/* Sprint 03 — Contratos completos */
+.mini-progress,.large-progress{height:9px;background:#04131f;border-radius:999px;overflow:hidden;min-width:100px}.mini-progress span,.large-progress span{display:block;height:100%;background:var(--green);border-radius:999px}.large-progress{height:18px;margin:22px 0 10px}.progress-label{display:flex;justify-content:space-between;gap:16px;margin-bottom:18px}.details-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.details-grid div{padding:12px;background:#071827;border:1px solid var(--border);border-radius:8px}.details-grid span{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}.compact{margin-top:22px}.contract-timeline{display:grid;gap:12px}.event-card{display:grid;grid-template-columns:110px 1fr auto;gap:18px;align-items:start;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}.event-date{font-weight:800;color:var(--green)}.event-card h3{margin:8px 0}.event-card p{margin:0 0 8px;color:#d7e4ed}@media(max-width:800px){.details-grid{grid-template-columns:1fr}.event-card{grid-template-columns:1fr}.event-date{order:-1}}
+
+/* Sprint 04 — Biblioteca Inteligente */
+.library-toolbar{display:grid;grid-template-columns:1fr 240px;gap:12px;margin-bottom:18px}
+.library-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.library-card{display:grid;gap:10px;text-align:left;background:#081827;border:1px solid var(--border);border-radius:10px;padding:16px;color:var(--text);cursor:pointer}
+.library-card:hover{border-color:var(--green);transform:translateY(-1px)}
+.library-card-head{display:flex;justify-content:space-between;align-items:center}.library-icon{font-size:24px;color:var(--green)}
+.library-status{font-size:11px;padding:5px 8px;border-radius:999px;background:#0a2c24;color:#b9ffe5}.library-status.expired{background:#4a1717;color:#fecaca}
+.library-card p{margin:0;color:#c7d4df;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
+.library-alerts{margin-top:18px}.library-alert-list{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.library-alert{background:#3a2210;border:1px solid #f59e0b55;border-radius:8px;color:#fde7b0;padding:12px;text-align:left;cursor:pointer}.library-alert strong,.library-alert span{display:block}.library-alert span{font-size:12px;margin-top:5px}
+.library-summary{white-space:pre-wrap;line-height:1.55;color:#dce8f0}
+@media(max-width:1000px){.library-grid{grid-template-columns:repeat(2,1fr)}.library-alert-list{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.library-toolbar,.library-grid,.library-alert-list{grid-template-columns:1fr}}
+
+
+/* Sprint 05 — Copiloto conectado aos dados reais */
+.copilot-workspace{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;min-height:calc(100vh - 120px)}
+.copilot-history{background:linear-gradient(180deg,var(--panel),#081724);border:1px solid var(--border);border-radius:10px;padding:14px;min-height:680px}
+.copilot-new{width:100%;justify-content:center;margin-bottom:12px}
+.copilot-history-list{display:grid;gap:8px;max-height:610px;overflow:auto}
+.copilot-history-row{display:grid;grid-template-columns:minmax(0,1fr) 32px;align-items:stretch;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#071827}
+.copilot-history-row.active{border-color:var(--green);background:#0b2b34}
+.copilot-history-open{display:grid;gap:5px;padding:11px;color:var(--text);background:transparent;border:0;text-align:left;cursor:pointer;min-width:0}
+.copilot-history-open strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copilot-history-open span{font-size:11px;color:var(--muted)}
+.copilot-history-delete{border:0;border-left:1px solid var(--border);background:transparent;color:#fca5a5;cursor:pointer;font-size:20px}
+.copilot-persistent-card{min-height:680px;display:grid;grid-template-rows:auto minmax(350px,1fr) auto auto auto;overflow:hidden}
+.copilot-conversation-title{padding:14px 16px;border-bottom:1px solid var(--border)}
+.copilot-conversation-title div{display:grid;gap:4px}
+.copilot-messages{padding:18px;display:flex;flex-direction:column;gap:13px;overflow:auto;max-height:560px}
+.copilot-message{max-width:86%;padding:13px 15px;border-radius:12px;line-height:1.55;white-space:pre-wrap}
+.copilot-message.user{align-self:flex-end;background:var(--green);color:#032017;border-bottom-right-radius:4px}
+.copilot-message.assistant{align-self:flex-start;background:#071827;border:1px solid var(--border);border-bottom-left-radius:4px}
+.copilot-message-content{white-space:pre-wrap}
+.copilot-sources{display:grid;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:#cbd5e1}
+.copilot-sources details{background:#06121f;border:1px solid var(--border);border-radius:7px;padding:8px 10px}
+.copilot-sources summary{cursor:pointer;color:var(--green);font-weight:800}
+.copilot-sources p{margin:8px 0 0;color:#b8c7d3}
+.copilot-suggestions{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 12px}
+.copilot-chip{border:0;cursor:pointer}
+.copilot-form{padding:14px 16px 16px;border-top:1px solid var(--border)}
+.copilot-textarea{min-height:92px;resize:vertical}
+.copilot-form-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:9px}
+@media(max-width:980px){.copilot-workspace{grid-template-columns:1fr}.copilot-history{min-height:auto}.copilot-history-list{max-height:230px}}
+@media(max-width:600px){.copilot-message{max-width:96%}}
+
+
+/* Sprint 06 — Leitor Inteligente de Editais */
+.bid-analyzer-control{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:end;margin-bottom:18px}
+.bid-analyzer-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+.analysis-history{position:sticky;top:18px;max-height:calc(100vh - 40px);overflow:auto}
+.analysis-history h3{margin-top:0}
+.analysis-history-list{display:grid;gap:9px}
+.analysis-history-item{display:grid;gap:6px;width:100%;padding:12px;border:1px solid var(--border);border-radius:9px;background:#071827;color:var(--text);text-align:left;cursor:pointer}
+.analysis-history-item.active,.analysis-history-item:hover{border-color:var(--green);background:#0b2b34}
+.analysis-history-item span{color:var(--muted);font-size:12px}
+.analysis-history-badges{display:flex;gap:6px;flex-wrap:wrap}
+.analysis-history-badges small{border:1px solid var(--border);border-radius:999px;padding:3px 7px;color:#b8c7d3}
+.analysis-content{display:grid;gap:16px;min-width:0}
+.analysis-empty{text-align:center;padding:70px 20px}
+.analysis-hero{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+.analysis-hero h2{margin:7px 0 10px;font-size:25px}
+.analysis-hero p{line-height:1.6;color:#c5d4df}
+.eyebrow{color:var(--green);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+.analysis-decision{display:grid;gap:8px;padding:16px;background:#071827;border:1px solid var(--border);border-radius:10px}
+.analysis-decision span{color:var(--muted);font-size:12px}
+.analysis-decision strong{font-size:19px}
+.analysis-decision small{color:#b8c7d3;line-height:1.45}
+.decision-participar{color:#6ee7b7}
+.decision-analisar-com-cautela{color:#fde68a}
+.decision-nao-participar{color:#fca5a5}
+.analysis-kpis{margin:0}
+.analysis-actions{display:flex;gap:10px;flex-wrap:wrap}
+.analysis-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.analysis-definition{display:grid;gap:0;margin:0}
+.analysis-definition>div{display:grid;grid-template-columns:160px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)}
+.analysis-definition>div:last-child{border-bottom:0}
+.analysis-definition dt{color:var(--muted)}
+.analysis-definition dd{margin:0;font-weight:700}
+.analysis-list{display:grid;gap:9px;margin:0;padding-left:20px;line-height:1.5}
+.analysis-list li::marker{color:var(--green)}
+.analysis-table-wrap{overflow:auto}
+.risk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.risk-card{display:grid;gap:8px;padding:14px;border:1px solid var(--border);border-radius:9px;background:#071827}
+.risk-card span{width:max-content;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900}
+.risk-card p{margin:0;color:#b8c7d3;line-height:1.45}
+.risk-baixo span{background:#12392f;color:#91f1c9}
+.risk-medio span{background:#403712;color:#ffe18b}
+.risk-alto span{background:#451c22;color:#ffafb9}
+.restrictive-list{display:grid;gap:10px}
+.restrictive-list article{padding:13px;background:#071827;border:1px solid var(--border);border-radius:8px}
+.restrictive-list p{margin:7px 0 0;color:#b8c7d3;line-height:1.5}
+.checklist-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.checklist-item{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#071827;border:1px solid var(--border);border-radius:8px}
+.checklist-item input{margin-top:3px;accent-color:var(--green)}
+.checklist-item span{display:grid;gap:4px}
+.checklist-item small{color:var(--muted)}
+.analysis-disclaimer{padding:13px 15px;border:1px solid #6b5b1e;background:#322c12;color:#f7df8c;border-radius:9px;font-size:12px;line-height:1.5}
+.empty.compact{padding:15px}
+@media(max-width:1100px){.bid-analyzer-layout{grid-template-columns:1fr}.analysis-history{position:static;max-height:none}.analysis-history-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){.bid-analyzer-control,.analysis-hero,.analysis-info-grid{grid-template-columns:1fr}.risk-grid,.checklist-grid{grid-template-columns:1fr}.analysis-history-list{grid-template-columns:1fr}.analysis-definition>div{grid-template-columns:1fr;gap:4px}}
+@media print{
+  .sidebar,.topbar,.bid-analyzer-control,.analysis-history,.no-print{display:none!important}
+  .main,.content{margin:0!important;padding:0!important}
+  .bid-analyzer-layout{display:block}
+  .analysis-content{display:block}
+  .card{break-inside:avoid;margin-bottom:14px;border:1px solid #bbb;background:white!important;color:#111!important}
+  body{background:white!important;color:#111!important}
+  .muted,.analysis-hero p,.risk-card p,.restrictive-list p{color:#444!important}
+}
