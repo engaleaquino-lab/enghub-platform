@@ -6,6 +6,7 @@ export default function Sidebar(){
     <aside className="sidebar">
       <div className="logo">Eng<span>Hub</span></div>
       <nav className="nav">
+        <Link href="/copiloto">Copiloto IA</Link>
         <Link href="/dashboard">Dashboard</Link>
         <Link href="/contratos">Contratos</Link>
         <Link href="/licitacoes">Licitações</Link>

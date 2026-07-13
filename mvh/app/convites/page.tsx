@@ -1,11 +1,10 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-export default function InvitePage(){
+function InviteContent(){
   const params=useSearchParams();
   const token=params.get("token");
   const [message,setMessage]=useState("Verificando convite...");
@@ -45,5 +44,9 @@ export default function InvitePage(){
     run();
   },[token]);
 
-  return <main className="login-wrap"><section className="login-card"><div className="logo">Eng<span>Hub</span></div><h1 className="section-title">Convite de equipe</h1><p className="muted">{message}</p></section></main>
+  return <main className="login-wrap"><section className="login-card"><div className="logo">Eng<span>Hub</span></div><h1 className="section-title">Convite de equipe</h1><p className="muted">{message}</p></section></main>;
+}
+
+export default function InvitePage(){
+  return <Suspense fallback={<main className="login-wrap"><section className="login-card"><div className="logo">Eng<span>Hub</span></div><p className="muted">Carregando convite...</p></section></main>}><InviteContent/></Suspense>;
 }

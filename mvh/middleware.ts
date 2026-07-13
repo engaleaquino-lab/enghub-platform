@@ -22,7 +22,7 @@ export async function middleware(request:NextRequest){
 
   const {data:{user}}=await supabase.auth.getUser();
   const protectedPath=[
-    "/dashboard","/contratos","/licitacoes","/perfil","/equipe","/admin"
+    "/copiloto","/dashboard","/contratos","/licitacoes","/perfil","/equipe","/admin"
   ].some(path=>request.nextUrl.pathname.startsWith(path));
 
   if(protectedPath && !user){

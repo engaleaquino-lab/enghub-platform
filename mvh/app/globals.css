@@ -91,3 +91,16 @@ select.input{appearance:auto}
 .file-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;color:#9fb1c2;font-size:12px}
 @media(max-width:900px){.timeline-row{grid-template-columns:1fr 1fr}.profile-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.timeline-row{grid-template-columns:1fr}}
+
+
+/* Copiloto IA */
+.copilot-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;min-height:calc(100vh - 150px);display:grid;grid-template-rows:1fr auto auto auto;overflow:hidden}
+.copilot-messages{padding:22px;display:flex;flex-direction:column;gap:14px;overflow:auto;max-height:62vh}
+.copilot-message{max-width:84%;padding:14px 16px;border-radius:12px;white-space:pre-wrap;line-height:1.55}
+.copilot-message.user{align-self:flex-end;background:var(--green);color:#042016;border-bottom-right-radius:4px}
+.copilot-message.assistant{align-self:flex-start;background:#071827;border:1px solid var(--border);border-bottom-left-radius:4px}
+.copilot-suggestions{display:flex;gap:8px;flex-wrap:wrap;padding:0 18px 14px}.copilot-chip{border:1px solid var(--border);cursor:pointer;background:#081827;color:#c8d6e2}
+.copilot-form{display:grid;grid-template-columns:1fr auto;gap:12px;padding:16px;border-top:1px solid var(--border)}
+.copilot-textarea{min-height:92px;resize:vertical}
+.copilot-form .btn{align-self:stretch}.copilot-form .btn:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:600px){.copilot-form{grid-template-columns:1fr}.copilot-message{max-width:96%}}
