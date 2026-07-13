@@ -18,3 +18,9 @@ Versão limpa e corrigida para publicação na Vercel.
 ## Build
 
 O código passou na verificação do TypeScript e na compilação do Next.js.
+
+## Copiloto com IA
+
+A rota `/copiloto` usa `/api/copiloto`, executada no servidor Next.js, para consultar a OpenAI com contexto dos contratos, licitações e medições da organização autenticada.
+
+Consulte `CONFIGURAR_COPILOTO_IA.md`.

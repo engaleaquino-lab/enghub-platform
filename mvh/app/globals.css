@@ -93,14 +93,31 @@ select.input{appearance:auto}
 @media(max-width:560px){.timeline-row{grid-template-columns:1fr}}
 
 
-/* Copiloto IA */
-.copilot-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;min-height:calc(100vh - 150px);display:grid;grid-template-rows:1fr auto auto auto;overflow:hidden}
-.copilot-messages{padding:22px;display:flex;flex-direction:column;gap:14px;overflow:auto;max-height:62vh}
-.copilot-message{max-width:84%;padding:14px 16px;border-radius:12px;white-space:pre-wrap;line-height:1.55}
-.copilot-message.user{align-self:flex-end;background:var(--green);color:#042016;border-bottom-right-radius:4px}
-.copilot-message.assistant{align-self:flex-start;background:#071827;border:1px solid var(--border);border-bottom-left-radius:4px}
-.copilot-suggestions{display:flex;gap:8px;flex-wrap:wrap;padding:0 18px 14px}.copilot-chip{border:1px solid var(--border);cursor:pointer;background:#081827;color:#c8d6e2}
-.copilot-form{display:grid;grid-template-columns:1fr auto;gap:12px;padding:16px;border-top:1px solid var(--border)}
-.copilot-textarea{min-height:92px;resize:vertical}
-.copilot-form .btn{align-self:stretch}.copilot-form .btn:disabled{opacity:.55;cursor:not-allowed}
-@media(max-width:600px){.copilot-form{grid-template-columns:1fr}.copilot-message{max-width:96%}}
+/* Sprint 02 — base operacional */
+.nav-button{
+  width:100%;
+  padding:12px 14px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:#cbd5e1;
+  text-align:left;
+  cursor:pointer;
+}
+.nav-button:hover{background:var(--panel);color:var(--green)}
+.dashboard-panels{margin-top:18px}
+.metric-list{display:grid;gap:12px;margin-top:14px}
+.metric-list>div{
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  padding:12px;
+  background:#071827;
+  border:1px solid var(--border);
+  border-radius:8px;
+}
+.metric-list span{color:var(--muted)}
+.positive{color:#6ee7b7}
+.negative{color:#fca5a5}
+.data-card{margin-top:18px;overflow:auto}
+.data-link{color:var(--green);font-weight:800}
