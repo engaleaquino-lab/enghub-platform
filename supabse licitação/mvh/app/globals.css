@@ -169,3 +169,68 @@ select.input{appearance:auto}
 .copilot-form-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:9px}
 @media(max-width:980px){.copilot-workspace{grid-template-columns:1fr}.copilot-history{min-height:auto}.copilot-history-list{max-height:230px}}
 @media(max-width:600px){.copilot-message{max-width:96%}}
+
+
+/* Sprint 06 — Leitor Inteligente de Editais */
+.bid-analyzer-control{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:end;margin-bottom:18px}
+.bid-analyzer-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+.analysis-history{position:sticky;top:18px;max-height:calc(100vh - 40px);overflow:auto}
+.analysis-history h3{margin-top:0}
+.analysis-history-list{display:grid;gap:9px}
+.analysis-history-item{display:grid;gap:6px;width:100%;padding:12px;border:1px solid var(--border);border-radius:9px;background:#071827;color:var(--text);text-align:left;cursor:pointer}
+.analysis-history-item.active,.analysis-history-item:hover{border-color:var(--green);background:#0b2b34}
+.analysis-history-item span{color:var(--muted);font-size:12px}
+.analysis-history-badges{display:flex;gap:6px;flex-wrap:wrap}
+.analysis-history-badges small{border:1px solid var(--border);border-radius:999px;padding:3px 7px;color:#b8c7d3}
+.analysis-content{display:grid;gap:16px;min-width:0}
+.analysis-empty{text-align:center;padding:70px 20px}
+.analysis-hero{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+.analysis-hero h2{margin:7px 0 10px;font-size:25px}
+.analysis-hero p{line-height:1.6;color:#c5d4df}
+.eyebrow{color:var(--green);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+.analysis-decision{display:grid;gap:8px;padding:16px;background:#071827;border:1px solid var(--border);border-radius:10px}
+.analysis-decision span{color:var(--muted);font-size:12px}
+.analysis-decision strong{font-size:19px}
+.analysis-decision small{color:#b8c7d3;line-height:1.45}
+.decision-participar{color:#6ee7b7}
+.decision-analisar-com-cautela{color:#fde68a}
+.decision-nao-participar{color:#fca5a5}
+.analysis-kpis{margin:0}
+.analysis-actions{display:flex;gap:10px;flex-wrap:wrap}
+.analysis-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.analysis-definition{display:grid;gap:0;margin:0}
+.analysis-definition>div{display:grid;grid-template-columns:160px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)}
+.analysis-definition>div:last-child{border-bottom:0}
+.analysis-definition dt{color:var(--muted)}
+.analysis-definition dd{margin:0;font-weight:700}
+.analysis-list{display:grid;gap:9px;margin:0;padding-left:20px;line-height:1.5}
+.analysis-list li::marker{color:var(--green)}
+.analysis-table-wrap{overflow:auto}
+.risk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.risk-card{display:grid;gap:8px;padding:14px;border:1px solid var(--border);border-radius:9px;background:#071827}
+.risk-card span{width:max-content;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900}
+.risk-card p{margin:0;color:#b8c7d3;line-height:1.45}
+.risk-baixo span{background:#12392f;color:#91f1c9}
+.risk-medio span{background:#403712;color:#ffe18b}
+.risk-alto span{background:#451c22;color:#ffafb9}
+.restrictive-list{display:grid;gap:10px}
+.restrictive-list article{padding:13px;background:#071827;border:1px solid var(--border);border-radius:8px}
+.restrictive-list p{margin:7px 0 0;color:#b8c7d3;line-height:1.5}
+.checklist-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.checklist-item{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#071827;border:1px solid var(--border);border-radius:8px}
+.checklist-item input{margin-top:3px;accent-color:var(--green)}
+.checklist-item span{display:grid;gap:4px}
+.checklist-item small{color:var(--muted)}
+.analysis-disclaimer{padding:13px 15px;border:1px solid #6b5b1e;background:#322c12;color:#f7df8c;border-radius:9px;font-size:12px;line-height:1.5}
+.empty.compact{padding:15px}
+@media(max-width:1100px){.bid-analyzer-layout{grid-template-columns:1fr}.analysis-history{position:static;max-height:none}.analysis-history-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){.bid-analyzer-control,.analysis-hero,.analysis-info-grid{grid-template-columns:1fr}.risk-grid,.checklist-grid{grid-template-columns:1fr}.analysis-history-list{grid-template-columns:1fr}.analysis-definition>div{grid-template-columns:1fr;gap:4px}}
+@media print{
+  .sidebar,.topbar,.bid-analyzer-control,.analysis-history,.no-print{display:none!important}
+  .main,.content{margin:0!important;padding:0!important}
+  .bid-analyzer-layout{display:block}
+  .analysis-content{display:block}
+  .card{break-inside:avoid;margin-bottom:14px;border:1px solid #bbb;background:white!important;color:#111!important}
+  body{background:white!important;color:#111!important}
+  .muted,.analysis-hero p,.risk-card p,.restrictive-list p{color:#444!important}
+}

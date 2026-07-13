@@ -14,6 +14,7 @@ export default function Sidebar() {
         <Link href="/financeiro">Financeiro</Link>
         <Link href="/biblioteca">Biblioteca Inteligente</Link>
         <Link href="/licitacoes">Licitações</Link>
+        <Link href="/editais">Leitor de Editais</Link>
         <Link href="/conhecimento">Conhecimento</Link>
         <Link href="/equipe">Equipe</Link>
         <Link href="/perfil">Perfil da empresa</Link>

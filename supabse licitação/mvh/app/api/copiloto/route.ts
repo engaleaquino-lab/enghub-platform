@@ -154,6 +154,7 @@ export async function POST(request: NextRequest) {
       measurementsResult,
       financeResult,
       documentsResult,
+      analysesResult,
     ] = await Promise.all([
       supabase
         .from("contracts")
@@ -180,6 +181,13 @@ export async function POST(request: NextRequest) {
         .select("id,name,category,contract_id,issue_date,expiry_date,status,summary")
         .eq("organization_id", organizationId)
         .limit(200),
+      supabase
+        .from("bid_analyses")
+        .select("executive_summary,recommendation,risk_level,extracted_data,created_at,company_documents(name)")
+        .eq("organization_id", organizationId)
+        .eq("status", "Concluído")
+        .order("created_at", { ascending: false })
+        .limit(30),
     ]);
 
     const firstError =
@@ -188,7 +196,8 @@ export async function POST(request: NextRequest) {
       bidsResult.error ||
       measurementsResult.error ||
       financeResult.error ||
-      documentsResult.error;
+      documentsResult.error ||
+      analysesResult.error;
 
     if (firstError) {
       return json({ error: `Falha ao consultar o banco: ${firstError.message}` }, 500);
@@ -218,6 +227,7 @@ export async function POST(request: NextRequest) {
       measurements: measurementsResult.data || [],
       financial_entries: financeResult.data || [],
       documents: documentsResult.data || [],
+      bid_analyses: analysesResult.data || [],
       relevant_document_chunks: chunks,
     };
 

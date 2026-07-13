@@ -1,23 +1,46 @@
 
-ENGHUB — SPRINT 05: COPILOTO COM DADOS REAIS
+ENGHUB — SPRINT 06: LEITOR INTELIGENTE DE EDITAIS
+
+ENTREGA
+- Seleção de editais enviados à Biblioteca Inteligente.
+- Análise completa por IA.
+- Resumo executivo.
+- Dados do órgão, modalidade, sessão, valor e prazo.
+- Documentos exigidos.
+- Qualificação técnica e econômico-financeira.
+- Garantias.
+- Prazos.
+- Matriz de riscos.
+- Possíveis cláusulas restritivas.
+- Checklist de participação.
+- Perguntas para esclarecimento.
+- Recomendação preliminar de participação.
+- Cadastro da análise no módulo Licitações.
+- Impressão e salvamento em PDF.
+- Histórico das análises.
+- Copiloto passa a consultar as análises de editais.
+
+INSTALAÇÃO
 
 1. Execute no Supabase:
-   mvh/sql/SPRINT_05_COPILOTO_DADOS_REAIS.sql
+   mvh/sql/SPRINT_06_LEITOR_EDITAIS.sql
 
-2. Confira na Vercel:
-   OPENAI_API_KEY
-   OPENAI_MODEL = gpt-5-mini
-   NEXT_PUBLIC_SUPABASE_URL
-   NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-3. Envie a pasta mvh completa ao GitHub.
+2. Envie a pasta mvh completa ao GitHub.
 
 Commit:
-Sprint 05 - Copiloto com dados reais
+Sprint 06 - Leitor Inteligente de Editais
 
-Testes:
-- Quanto tenho medido e ainda não recebido?
-- Quais contas estão pendentes?
-- Quais documentos vencem nos próximos 30 dias?
-- Adicione um PDF na Biblioteca e pergunte algo contido nele.
-- Atualize a página e confirme que a conversa permanece salva.
+3. Aguarde o deploy automático da Vercel.
+
+TESTE
+- Abra Biblioteca Inteligente.
+- Envie um edital em PDF.
+- Aguarde o processamento como Concluído.
+- Abra Leitor de Editais.
+- Selecione o arquivo e clique em Analisar edital.
+
+Variáveis já utilizadas:
+OPENAI_API_KEY
+OPENAI_MODEL
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY

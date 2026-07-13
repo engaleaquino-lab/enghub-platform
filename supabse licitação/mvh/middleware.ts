@@ -43,6 +43,7 @@ export async function middleware(request: NextRequest) {
     "/financeiro",
     "/biblioteca",
     "/licitacoes",
+    "/editais",
     "/conhecimento",
     "/perfil",
     "/equipe",
