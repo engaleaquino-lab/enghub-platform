@@ -1,0 +1,16 @@
+Configure estas variáveis no painel da Vercel:
+
+NEXT_PUBLIC_SUPABASE_URL
+https://pdemjgsjhuuaoevhrewm.supabase.co
+
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+sb_publishable_BJom2NIB22-MKQJ0mRi3GQ_Yv-IS0-r
+
+NEXT_PUBLIC_APP_URL
+https://SEU-ENDERECO-DA-PLATAFORMA.vercel.app
+
+SUPABASE_SERVICE_ROLE_KEY
+[COLE DIRETAMENTE NA VERCEL. NÃO ENVIE PELO CHAT E NÃO COLOQUE EM ARQUIVOS PÚBLICOS.]
+
+Observação:
+A chave publishable é destinada ao frontend. A service_role é administrativa e deve existir apenas no servidor.

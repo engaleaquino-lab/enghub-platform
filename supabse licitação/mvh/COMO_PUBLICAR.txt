@@ -1,0 +1,22 @@
+ENGHUB 2.0 — PUBLICAÇÃO SIMPLES
+
+1. No GitHub, abra o repositório enghub-platform.
+2. Apague a pasta antiga chamada mvh.
+3. Crie novamente uma pasta chamada mvh.
+4. Envie TODOS os arquivos e pastas deste pacote para dentro de mvh.
+5. Confirme o Commit changes.
+6. A Vercel fará um novo deploy automaticamente.
+
+NA VERCEL:
+Root Directory deve continuar como:
+mvh
+
+VARIÁVEIS DE AMBIENTE:
+NEXT_PUBLIC_SUPABASE_URL
+https://pdemjgsjhuuaoevhrewm.supabase.co
+
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+sb_publishable_BJom2NIB22-MKQJ0mRi3GQ_Yv-IS0-r
+
+Não envie ZIP para dentro do GitHub.
+Extraia primeiro e envie o conteúdo da pasta.

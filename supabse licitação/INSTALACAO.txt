@@ -1,0 +1,24 @@
+ENGHUB — SPRINT 04: BIBLIOTECA INTELIGENTE
+
+ENTREGA
+- Biblioteca central de documentos.
+- Upload de PDF, DOCX, Excel, CSV e texto.
+- Classificação automática do documento.
+- Extração e resumo de conteúdo.
+- Indexação dos textos para pesquisa pelo Copiloto.
+- Vínculo com contratos.
+- Controle de emissão, validade e alertas.
+- Copiloto passa a consultar documentos relevantes.
+
+PASSO 1 — SUPABASE
+Execute:
+mvh/sql/SPRINT_04_BIBLIOTECA_INTELIGENTE.sql
+
+PASSO 2 — GITHUB
+Envie a pasta mvh completa para o repositório e faça o commit:
+Sprint 04 - Biblioteca Inteligente
+
+A Vercel publicará automaticamente.
+
+NOVA ROTA
+/biblioteca
