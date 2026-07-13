@@ -155,3 +155,13 @@ export function dateBR(value?: string | null) {
   const date = new Date(`${value.slice(0, 10)}T12:00:00`);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR");
 }
+export async function getSignedFileUrl(
+  bucket: string,
+  path: string
+) {
+  const { data } = await supabaseBrowser.storage
+    .from(bucket)
+    .createSignedUrl(path, 3600);
+
+  return data?.signedUrl ?? "";
+}
