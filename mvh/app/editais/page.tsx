@@ -266,7 +266,8 @@ export default function BidAnalyzerPage() {
         );
       }
 
-      const totalSteps = totalBatches + totalMerges + 1;
+      const totalFinalSections = 4;
+      const totalSteps = totalBatches + totalMerges + totalFinalSections + 1;
       let completedSteps = completedBatches + completedMerges;
 
       setProgress(
@@ -337,14 +338,46 @@ export default function BidAnalyzerPage() {
         );
       }
 
-      setProgressLabel("Montando a análise final do edital…");
+      const finalLabels = [
+        "Dados gerais, credenciamento e habilitação jurídica",
+        "Habilitação fiscal, trabalhista e técnica",
+        "Econômico-financeira, declarações, garantias e prazos",
+        "Execução, riscos, itens eliminatórios e checklist",
+      ];
+
+      for (
+        let sectionIndex = 0;
+        sectionIndex < totalFinalSections;
+        sectionIndex += 1
+      ) {
+        setProgressLabel(
+          `Consolidação final ${sectionIndex + 1} de ${totalFinalSections}: ` +
+            `${finalLabels[sectionIndex]}…`,
+        );
+
+        await requestStep(
+          {
+            action: "process_final_section",
+            analysis_id: analysisId,
+            section_index: sectionIndex,
+          },
+          `Seção final ${sectionIndex + 1}`,
+        );
+
+        completedSteps += 1;
+        setProgress(
+          Math.round((completedSteps / totalSteps) * 100),
+        );
+      }
+
+      setProgressLabel("Juntando as quatro seções finais…");
 
       const result = await requestStep(
         {
-          action: "consolidate",
+          action: "finalize",
           analysis_id: analysisId,
         },
-        "Análise final",
+        "Finalização",
       );
 
       setProgress(100);

@@ -15,7 +15,8 @@ type Action =
   | "resume"
   | "process_batch"
   | "process_merge"
-  | "consolidate";
+  | "process_final_section"
+  | "finalize";
 
 type RequestBody = {
   action?: Action;
@@ -23,6 +24,7 @@ type RequestBody = {
   analysis_id?: string;
   batch_index?: number;
   merge_index?: number;
+  section_index?: number;
 };
 
 type ApiContext = Awaited<ReturnType<typeof getContext>>;
@@ -554,6 +556,194 @@ const finalSchema = {
     "attention_points",
   ],
 } as const;
+
+
+
+const finalCoreSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    executive_summary: { type: "string" },
+    object: { type: "string" },
+    agency: { type: "string" },
+    notice_number: { type: "string" },
+    modality: { type: "string" },
+    session_date: { anyOf: [{ type: "string" }, { type: "null" }] },
+    estimated_value: { anyOf: [{ type: "number" }, { type: "null" }] },
+    execution_deadline: { type: "string" },
+    proposal_validity: { type: "string" },
+    judgment_criterion: { type: "string" },
+    credentialing: finalSchema.properties.credentialing,
+    legal_qualification: finalSchema.properties.legal_qualification,
+  },
+  required: [
+    "executive_summary",
+    "object",
+    "agency",
+    "notice_number",
+    "modality",
+    "session_date",
+    "estimated_value",
+    "execution_deadline",
+    "proposal_validity",
+    "judgment_criterion",
+    "credentialing",
+    "legal_qualification",
+  ],
+} as const;
+
+const finalTechnicalSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    fiscal_labor_qualification:
+      finalSchema.properties.fiscal_labor_qualification,
+    crea_requirements: finalSchema.properties.crea_requirements,
+    cat_requirements: finalSchema.properties.cat_requirements,
+    technical_certificates:
+      finalSchema.properties.technical_certificates,
+    other_technical_requirements:
+      finalSchema.properties.other_technical_requirements,
+  },
+  required: [
+    "fiscal_labor_qualification",
+    "crea_requirements",
+    "cat_requirements",
+    "technical_certificates",
+    "other_technical_requirements",
+  ],
+} as const;
+
+const finalEconomicSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    economic_financial_qualification:
+      finalSchema.properties.economic_financial_qualification,
+    declarations: finalSchema.properties.declarations,
+    guarantees: finalSchema.properties.guarantees,
+    site_visit: finalSchema.properties.site_visit,
+    deadlines: finalSchema.properties.deadlines,
+  },
+  required: [
+    "economic_financial_qualification",
+    "declarations",
+    "guarantees",
+    "site_visit",
+    "deadlines",
+  ],
+} as const;
+
+const finalRiskSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    execution_measurement_payment:
+      finalSchema.properties.execution_measurement_payment,
+    penalties: finalSchema.properties.penalties,
+    participation_recommendation:
+      finalSchema.properties.participation_recommendation,
+    recommendation_reason:
+      finalSchema.properties.recommendation_reason,
+    risks: finalSchema.properties.risks,
+    restrictive_clauses:
+      finalSchema.properties.restrictive_clauses,
+    checklist: finalSchema.properties.checklist,
+    mandatory_documents:
+      finalSchema.properties.mandatory_documents,
+    mandatory_actions:
+      finalSchema.properties.mandatory_actions,
+    disqualification_risks:
+      finalSchema.properties.disqualification_risks,
+    clarification_questions:
+      finalSchema.properties.clarification_questions,
+    attention_points: finalSchema.properties.attention_points,
+  },
+  required: [
+    "execution_measurement_payment",
+    "penalties",
+    "participation_recommendation",
+    "recommendation_reason",
+    "risks",
+    "restrictive_clauses",
+    "checklist",
+    "mandatory_documents",
+    "mandatory_actions",
+    "disqualification_risks",
+    "clarification_questions",
+    "attention_points",
+  ],
+} as const;
+
+const FINAL_SECTION_CONFIG = [
+  {
+    name: "enghub_final_core",
+    schema: finalCoreSchema,
+    maxOutputTokens: 1800,
+    instructions: `
+Extraia somente:
+- dados principais do edital;
+- Credenciamento;
+- Habilitação Jurídica.
+
+Liste cada documento e providência individualmente.
+Preserve obrigatoriedade, etapa, consequência e referência.
+Não inclua seções técnicas, fiscais ou econômico-financeiras.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_technical",
+    schema: finalTechnicalSchema,
+    maxOutputTokens: 2600,
+    instructions: `
+Extraia somente:
+- Habilitação Fiscal e Trabalhista;
+- CREA;
+- CAT;
+- cada atestado técnico;
+- outras exigências técnicas.
+
+Nunca agrupe certidões.
+Cada atestado deve conter serviço, quantidade, unidade, percentual,
+somatório, titular, aceitação público/privado, referência e evidência literal.
+Não inclua declarações ou execução contratual.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_economic",
+    schema: finalEconomicSchema,
+    maxOutputTokens: 2200,
+    instructions: `
+Extraia somente:
+- Habilitação Econômico-Financeira;
+- Declarações e respectivos anexos;
+- Garantias;
+- Visita/Vistoria Técnica;
+- Prazos importantes.
+
+Cada declaração deve conter anexo, nome, obrigatoriedade,
+etapa de entrega, modelo fornecido, consequência e referência.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_risks",
+    schema: finalRiskSchema,
+    maxOutputTokens: 2600,
+    instructions: `
+Extraia somente:
+- Execução, medição e pagamento;
+- Penalidades;
+- Riscos;
+- Cláusulas potencialmente restritivas;
+- Checklist;
+- Itens eliminatórios;
+- Recomendação final.
+
+O checklist deve conter cada documento, declaração, atestado
+e providência concreta separadamente.
+    `.trim(),
+  },
+] as const;
 
 
 type ChatCompletionMessage = {
@@ -1518,9 +1708,9 @@ function buildLiteralAudit(
   ];
 }
 
-async function consolidateAnalysis(
+
+async function getFinalSourceData(
   analysisId: string,
-  apiKey: string,
   context: ApiContext,
 ) {
   const { supabase, organizationId } = context;
@@ -1572,158 +1762,280 @@ async function consolidateAnalysis(
     );
   }
 
-  await supabase
-    .from("bid_analyses")
-    .update({
-      status: "Consolidando",
-      error_message: null,
-    })
-    .eq("id", analysisId);
+  return {
+    analysis,
+    merges,
+    criticalAudit,
+    literalAudit,
+  };
+}
+
+async function processFinalSection(
+  analysisId: string,
+  sectionIndex: number,
+  apiKey: string,
+  context: ApiContext,
+) {
+  const { supabase, organizationId } = context;
+
+  if (
+    !Number.isInteger(sectionIndex) ||
+    sectionIndex < 0 ||
+    sectionIndex >= FINAL_SECTION_CONFIG.length
+  ) {
+    throw new Error("Seção final inválida.");
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("bid_analysis_final_sections")
+    .select("*")
+    .eq("analysis_id", analysisId)
+    .eq("section_index", sectionIndex)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  if (existing?.status === "Concluído" && existing.section_data) {
+    return {
+      section_index: sectionIndex,
+      status: "Concluído",
+      reused: true,
+    };
+  }
+
+  const source = await getFinalSourceData(analysisId, context);
+  const config = FINAL_SECTION_CONFIG[sectionIndex];
+
+  const rowPayload = {
+    organization_id: organizationId,
+    analysis_id: analysisId,
+    document_id: source.analysis.document_id,
+    section_index: sectionIndex,
+    section_name: config.name,
+    status: "Processando",
+    error_message: null,
+    attempts: Number(existing?.attempts || 0) + 1,
+  };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("bid_analysis_final_sections")
+      .update(rowPayload)
+      .eq("id", existing.id);
+
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("bid_analysis_final_sections")
+      .insert(rowPayload);
+
+    if (error) throw error;
+  }
 
   try {
-    const finalAnalysis = await callStructuredOpenAI({
+    const result = await callStructuredOpenAI({
       apiKey,
-      schemaName: "enghub_complete_bid_analysis",
-      schema: finalSchema,
-      maxOutputTokens: 4200,
+      schemaName: config.name,
+      schema: config.schema,
+      maxOutputTokens: config.maxOutputTokens,
       instructions: `
-Você é um analista sênior de licitações e obras públicas brasileiras.
+Você é um auditor de editais de obras públicas brasileiras.
 
-Produza a análise final usando as consolidações compactas que representam
-TODOS os trechos do edital.
+Você NÃO é um resumidor.
+Sua função é localizar todas as exigências da seção solicitada.
 
-Elimine duplicidades sem perder detalhes, quantitativos,
-prazos, exigências ou condições.
+${config.instructions}
 
-Não invente informações ausentes. Quando um campo principal
-não for localizado, use string vazia ou null.
-
-Datas identificáveis devem usar YYYY-MM-DD. Valores devem ser
-números sem símbolo monetário.
-
-Não declare cláusulas como ilegais. Classifique-as somente como
-potencialmente restritivas e explique o motivo.
-
-A recomendação de participação é preliminar e deve considerar
-riscos, habilitação, prazo, execução e clareza do edital.
-
-DETALHAMENTO OBRIGATÓRIO:
-- Estruture a resposta exatamente na ordem: Credenciamento; Habilitação Jurídica; Habilitação Fiscal e Trabalhista; Habilitação Técnica; Habilitação Econômico-Financeira; Declarações; Garantias/Visita/Prazos; Execução/Medição/Pagamento.
-- Credenciamento deve conter representante, procuração, documento pessoal, cadastro em plataforma, data/etapa e consequência.
-- Habilitação jurídica deve listar cada documento individualmente.
-- Fiscal e trabalhista deve listar Receita Federal/PGFN, Estadual, Municipal, FGTS e CNDT individualmente.
-- Habilitação técnica deve separar CREA da empresa, CREA dos profissionais, CAT, vínculo e cada atestado.
-- Para cada atestado, extraia serviço exato, quantidade mínima, unidade, percentual, titular, somatório, aceitação público/privado e referência.
-- Exemplo: estrutura metálica, mínimo 3.000 kg; cobertura em telha metálica, mínimo 500 m².
-- Econômico-financeira deve separar balanço, DRE, índices, capital social, patrimônio líquido e falência.
-- Declarações devem conter número do anexo, nome completo, obrigatoriedade, etapa de entrega, existência de modelo e consequência.
-- Nunca omita uma exigência encontrada na auditoria literal.
-- Use "Trecho N" como referência quando a página/item não estiver expressa no texto.
-- Só informe página ou item quando estiver literalmente disponível.
-- O checklist deve ter um item para cada documento, declaração, atestado e providência concreta.
+REGRAS GERAIS:
+- Não invente informações.
+- Preserve números, unidades, percentuais e referências.
+- Use "Trecho N" quando página/item não estiver disponível.
+- Nunca omita uma exigência presente na auditoria literal.
       `.trim(),
       input: `
 DOCUMENTO: ${
-        (analysis as any).company_documents?.name || "Edital"
+        (source.analysis as any).company_documents?.name || "Edital"
       }
 
-CONSOLIDAÇÕES DE TODO O EDITAL:
+CONSOLIDAÇÕES INTERMEDIÁRIAS:
 
-${JSON.stringify(merges)}
+${JSON.stringify(source.merges)}
 
-AUDITORIA LITERAL DE EXPRESSÕES CRÍTICAS DO TEXTO COMPLETO:
+AUDITORIA LITERAL DO TEXTO COMPLETO:
 
-${JSON.stringify(literalAudit)}
+${JSON.stringify(source.literalAudit)}
       `.trim(),
     });
 
-    finalAnalysis.fiscal_documents = uniqueStrings([
-      ...(finalAnalysis.fiscal_documents || []),
-      ...criticalAudit.forced_fiscal_documents,
-    ]);
-
-    finalAnalysis.site_visit = uniqueStrings([
-      ...(finalAnalysis.site_visit || []),
-      ...criticalAudit.forced_site_visit,
-    ]);
-
-    finalAnalysis.checklist = uniqueObjects(
-      [
-        ...(finalAnalysis.checklist || []),
-        ...criticalAudit.forced_checklist,
-      ],
-      (value: any) => `${value.category}-${value.item}`,
-    );
-
-    finalAnalysis.mandatory_documents = uniqueObjects(
-      [
-        ...(finalAnalysis.mandatory_documents || []),
-        ...criticalAudit.mandatory_documents,
-      ],
-      (value: any) => `${value.item}-${value.evidence}`,
-    );
-
-    finalAnalysis.mandatory_actions = uniqueObjects(
-      [
-        ...(finalAnalysis.mandatory_actions || []),
-        ...criticalAudit.mandatory_actions,
-      ],
-      (value: any) => `${value.item}-${value.evidence}`,
-    );
-
-    finalAnalysis.disqualification_risks = uniqueObjects(
-      [
-        ...(finalAnalysis.disqualification_risks || []),
-        ...criticalAudit.disqualification_risks,
-      ],
-      (value: any) => `${value.item}-${value.evidence}`,
-    );
-
-    const riskLevel = finalAnalysis.risks?.some(
-      (risk: any) => risk.level === "Alto",
-    )
-      ? "Alto"
-      : finalAnalysis.risks?.some(
-            (risk: any) => risk.level === "Médio",
-          )
-        ? "Médio"
-        : "Baixo";
-
-    const { data: saved, error: saveError } = await supabase
-      .from("bid_analyses")
+    const { error: updateError } = await supabase
+      .from("bid_analysis_final_sections")
       .update({
         status: "Concluído",
-        executive_summary: finalAnalysis.executive_summary,
-        extracted_data: finalAnalysis,
-        recommendation:
-          finalAnalysis.participation_recommendation,
-        risk_level: riskLevel,
+        section_data: result,
         error_message: null,
         completed_at: new Date().toISOString(),
       })
-      .eq("id", analysisId)
-      .select("*,company_documents(name,category)")
-      .single();
+      .eq("analysis_id", analysisId)
+      .eq("section_index", sectionIndex)
+      .eq("organization_id", organizationId);
 
-    if (saveError) throw saveError;
+    if (updateError) throw updateError;
 
-    return saved;
+    return {
+      section_index: sectionIndex,
+      status: "Concluído",
+    };
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
-        : "Erro na consolidação final.";
+        : "Erro na seção final.";
 
     await supabase
-      .from("bid_analyses")
+      .from("bid_analysis_final_sections")
       .update({
         status: "Erro",
-        error_message: `Consolidação final: ${message}`,
+        error_message: message,
       })
-      .eq("id", analysisId);
+      .eq("analysis_id", analysisId)
+      .eq("section_index", sectionIndex)
+      .eq("organization_id", organizationId);
 
     throw error;
   }
+}
+
+async function finalizeAnalysis(
+  analysisId: string,
+  context: ApiContext,
+) {
+  const { supabase, organizationId } = context;
+  const source = await getFinalSourceData(analysisId, context);
+
+  const { data: sections, error: sectionsError } = await supabase
+    .from("bid_analysis_final_sections")
+    .select("section_index,status,section_data")
+    .eq("analysis_id", analysisId)
+    .eq("organization_id", organizationId)
+    .order("section_index", { ascending: true });
+
+  if (sectionsError) throw sectionsError;
+
+  if (!sections || sections.length !== FINAL_SECTION_CONFIG.length) {
+    throw new Error("As quatro seções finais ainda não foram criadas.");
+  }
+
+  const incomplete = sections.filter(
+    (section) => section.status !== "Concluído",
+  );
+
+  if (incomplete.length) {
+    throw new Error(
+      `Ainda existem ${incomplete.length} seção(ões) finais pendentes.`,
+    );
+  }
+
+  const finalAnalysis = Object.assign(
+    {},
+    ...sections.map((section) => section.section_data || {}),
+  ) as any;
+
+  finalAnalysis.fiscal_labor_qualification =
+    finalAnalysis.fiscal_labor_qualification || [];
+  finalAnalysis.site_visit = finalAnalysis.site_visit || [];
+  finalAnalysis.checklist = finalAnalysis.checklist || [];
+  finalAnalysis.mandatory_documents =
+    finalAnalysis.mandatory_documents || [];
+  finalAnalysis.mandatory_actions =
+    finalAnalysis.mandatory_actions || [];
+  finalAnalysis.disqualification_risks =
+    finalAnalysis.disqualification_risks || [];
+
+  for (const forced of source.criticalAudit.forced_fiscal_documents) {
+    const exists = finalAnalysis.fiscal_labor_qualification.some(
+      (item: any) =>
+        JSON.stringify(item).toLowerCase().includes(
+          forced.toLowerCase(),
+        ),
+    );
+
+    if (!exists) {
+      finalAnalysis.fiscal_labor_qualification.push({
+        document: forced,
+        issuing_body_or_scope: "Justiça do Trabalho",
+        validity_or_condition: "Conferir validade no edital",
+        mandatory: "Sim, quando exigida",
+        source_reference: "Auditoria literal do texto completo",
+      });
+    }
+  }
+
+  finalAnalysis.checklist = uniqueObjects(
+    [
+      ...finalAnalysis.checklist,
+      ...source.criticalAudit.forced_checklist.map((item) => ({
+        ...item,
+        source_reference: "Auditoria literal do texto completo",
+      })),
+    ],
+    (value: any) => `${value.category}-${value.item}`,
+  );
+
+  finalAnalysis.mandatory_documents = uniqueObjects(
+    [
+      ...finalAnalysis.mandatory_documents,
+      ...source.criticalAudit.mandatory_documents,
+    ],
+    (value: any) => `${value.item}-${value.evidence}`,
+  );
+
+  finalAnalysis.mandatory_actions = uniqueObjects(
+    [
+      ...finalAnalysis.mandatory_actions,
+      ...source.criticalAudit.mandatory_actions,
+    ],
+    (value: any) => `${value.item}-${value.evidence}`,
+  );
+
+  finalAnalysis.disqualification_risks = uniqueObjects(
+    [
+      ...finalAnalysis.disqualification_risks,
+      ...source.criticalAudit.disqualification_risks,
+    ],
+    (value: any) => `${value.item}-${value.evidence}`,
+  );
+
+  const riskLevel = finalAnalysis.risks?.some(
+    (risk: any) => risk.level === "Alto",
+  )
+    ? "Alto"
+    : finalAnalysis.risks?.some(
+          (risk: any) => risk.level === "Médio",
+        )
+      ? "Médio"
+      : "Baixo";
+
+  const { data: saved, error: saveError } = await supabase
+    .from("bid_analyses")
+    .update({
+      status: "Concluído",
+      executive_summary: finalAnalysis.executive_summary || "",
+      extracted_data: finalAnalysis,
+      recommendation:
+        finalAnalysis.participation_recommendation ||
+        "Analisar com cautela",
+      risk_level: riskLevel,
+      error_message: null,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", analysisId)
+    .select("*,company_documents(name,category)")
+    .single();
+
+  if (saveError) throw saveError;
+
+  return saved;
 }
 
 export async function POST(request: NextRequest) {
@@ -1814,11 +2126,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (action === "consolidate") {
-      return json({
-        analysis: await consolidateAnalysis(
+    if (action === "process_final_section") {
+      const sectionIndex = Number(body.section_index);
+
+      if (!Number.isInteger(sectionIndex) || sectionIndex < 0) {
+        return json(
+          { error: "Índice da seção final inválido." },
+          400,
+        );
+      }
+
+      return json(
+        await processFinalSection(
           analysisId,
+          sectionIndex,
           apiKey,
+          context,
+        ),
+      );
+    }
+
+    if (action === "finalize") {
+      return json({
+        analysis: await finalizeAnalysis(
+          analysisId,
           context,
         ),
       });
