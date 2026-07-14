@@ -8,6 +8,140 @@ export const maxDuration = 60;
 const OPENAI_TIMEOUT_MS = 50_000;
 const MAX_EDITAL_CHARS = 48_000;
 
+const analysisJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    executive_summary: { type: "string" },
+    object: { type: "string" },
+    agency: { type: "string" },
+    notice_number: { type: "string" },
+    modality: { type: "string" },
+    session_date: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    estimated_value: {
+      anyOf: [{ type: "number" }, { type: "null" }],
+    },
+    execution_deadline: { type: "string" },
+    proposal_validity: { type: "string" },
+    judgment_criterion: { type: "string" },
+    participation_recommendation: {
+      type: "string",
+      enum: ["Participar", "Analisar com cautela", "Não participar"],
+    },
+    recommendation_reason: { type: "string" },
+    required_documents: {
+      type: "array",
+      items: { type: "string" },
+    },
+    technical_requirements: {
+      type: "array",
+      items: { type: "string" },
+    },
+    financial_requirements: {
+      type: "array",
+      items: { type: "string" },
+    },
+    guarantees: {
+      type: "array",
+      items: { type: "string" },
+    },
+    deadlines: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          date: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+          },
+          detail: { type: "string" },
+        },
+        required: ["item", "date", "detail"],
+      },
+    },
+    risks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          level: {
+            type: "string",
+            enum: ["Baixo", "Médio", "Alto"],
+          },
+          item: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["level", "item", "reason"],
+      },
+    },
+    restrictive_clauses: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          explanation: { type: "string" },
+        },
+        required: ["item", "explanation"],
+      },
+    },
+    checklist: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          category: { type: "string" },
+          priority: {
+            type: "string",
+            enum: ["Baixa", "Média", "Alta"],
+          },
+        },
+        required: ["item", "category", "priority"],
+      },
+    },
+    clarification_questions: {
+      type: "array",
+      items: { type: "string" },
+    },
+    attention_points: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+  required: [
+    "executive_summary",
+    "object",
+    "agency",
+    "notice_number",
+    "modality",
+    "session_date",
+    "estimated_value",
+    "execution_deadline",
+    "proposal_validity",
+    "judgment_criterion",
+    "participation_recommendation",
+    "recommendation_reason",
+    "required_documents",
+    "technical_requirements",
+    "financial_requirements",
+    "guarantees",
+    "deadlines",
+    "risks",
+    "restrictive_clauses",
+    "checklist",
+    "clarification_questions",
+    "attention_points",
+  ],
+} as const;
+
+
 type AnalysisPayload = {
   executive_summary: string;
   object: string;
@@ -76,7 +210,7 @@ function extractJson(text: string) {
   const last = cleaned.lastIndexOf("}");
 
   if (first < 0 || last <= first) {
-    throw new Error("A IA não devolveu um JSON válido.");
+    throw new Error("A resposta estruturada da IA veio vazia ou incompleta.");
   }
 
   return JSON.parse(cleaned.slice(first, last + 1));
@@ -238,44 +372,18 @@ export async function POST(request: NextRequest) {
 
     const instructions = `
 Você é um analista sênior de licitações e obras públicas brasileiras.
-Analise o edital fornecido com rigor técnico e administrativo.
+
+Analise o edital com rigor técnico e administrativo.
 
 REGRAS:
-- Responda somente com JSON válido, sem markdown.
 - Não invente dados ausentes.
-- Datas devem estar em YYYY-MM-DD quando forem identificáveis.
-- Valores devem ser números, sem R$ e sem separadores de milhar.
-- A recomendação é preliminar e deve considerar riscos, exigências e clareza do edital.
-- Não declare uma cláusula como ilegal; classifique como potencialmente restritiva e explique.
-- Liste documentos e requisitos de forma objetiva.
-- Em riscos, use apenas: Baixo, Médio ou Alto.
-- Em prioridade do checklist, use apenas: Baixa, Média ou Alta.
-
-FORMATO OBRIGATÓRIO:
-{
-  "executive_summary": "string",
-  "object": "string",
-  "agency": "string",
-  "notice_number": "string",
-  "modality": "string",
-  "session_date": "YYYY-MM-DD ou null",
-  "estimated_value": 0 ou null,
-  "execution_deadline": "string",
-  "proposal_validity": "string",
-  "judgment_criterion": "string",
-  "participation_recommendation": "Participar | Analisar com cautela | Não participar",
-  "recommendation_reason": "string",
-  "required_documents": ["string"],
-  "technical_requirements": ["string"],
-  "financial_requirements": ["string"],
-  "guarantees": ["string"],
-  "deadlines": [{"item":"string","date":"YYYY-MM-DD ou null","detail":"string"}],
-  "risks": [{"level":"Baixo | Médio | Alto","item":"string","reason":"string"}],
-  "restrictive_clauses": [{"item":"string","explanation":"string"}],
-  "checklist": [{"item":"string","category":"string","priority":"Baixa | Média | Alta"}],
-  "clarification_questions": ["string"],
-  "attention_points": ["string"]
-}
+- Quando uma informação não estiver identificada, use string vazia, lista vazia ou null conforme o campo.
+- Datas identificáveis devem usar YYYY-MM-DD.
+- Valores devem ser números, sem símbolo monetário.
+- A recomendação é preliminar e deve considerar exigências, riscos, prazo e clareza do edital.
+- Não declare cláusulas como ilegais. Classifique apenas como potencialmente restritivas e explique.
+- Seja objetivo e evite itens repetidos.
+- Limite cada lista aos itens realmente relevantes.
 `.trim();
 
     const input = `
@@ -306,10 +414,13 @@ ${fullText}
           model: process.env.OPENAI_MODEL || "gpt-5-mini",
           instructions,
           input,
-          max_output_tokens: 3200,
+          max_output_tokens: 5000,
           text: {
             format: {
-              type: "json_object",
+              type: "json_schema",
+              name: "bid_analysis",
+              strict: true,
+              schema: analysisJsonSchema,
             },
           },
           store: false,
