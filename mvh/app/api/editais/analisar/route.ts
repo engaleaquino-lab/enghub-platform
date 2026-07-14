@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 const CHUNKS_PER_BATCH = 1;
 const BATCHES_PER_MERGE = 3;
-const OPENAI_TIMEOUT_MS = 45_000;
+const OPENAI_TIMEOUT_MS = 52_000;
 const OPENAI_ATTEMPTS = 1;
 
 type Action =
@@ -924,7 +924,8 @@ async function callStructuredOpenAI(args: {
 
       if (choice?.finish_reason === "length") {
         throw new Error(
-          "A resposta atingiu o limite antes de terminar.",
+          `A etapa ${args.schemaName} atingiu o limite de ` +
+            `${args.maxOutputTokens} tokens antes de terminar.`,
         );
       }
 
@@ -1267,7 +1268,7 @@ async function processBatch(
       apiKey,
       schemaName: "enghub_bid_batch",
       schema: compactBatchSchema,
-      maxOutputTokens: 650,
+      maxOutputTokens: 1900,
       instructions: `
 Você analisa trechos de um edital público brasileiro.
 
@@ -1284,6 +1285,7 @@ Leia integralmente todo o lote e classifique literalmente as exigências nas se�
 
 REGRAS:
 - Cada item deve começar com a referência "[Trecho N]" correspondente.
+- Cada item deve ter no máximo 240 caracteres.
 - Preserve exatamente serviços, quantidades, unidades, percentuais, prazos e condições.
 - Exemplo técnico: "[Trecho 18] Atestado de estrutura metálica: mínimo 3.000 kg; somatório não informado."
 - Nunca resuma "certidões": liste Receita Federal/PGFN, Estadual, Municipal, FGTS e CNDT separadamente.
@@ -1409,12 +1411,13 @@ async function processMerge(
       apiKey,
       schemaName: "enghub_bid_merge",
       schema: compactBatchSchema,
-      maxOutputTokens: 900,
+      maxOutputTokens: 2800,
       instructions: `
 Você consolida análises literais de trechos consecutivos do mesmo edital.
 
 REGRAS:
 - Preserve as referências "[Trecho N]".
+- Cada item consolidado deve ter no máximo 260 caracteres.
 - Não misture Credenciamento com Habilitação Jurídica.
 - Não misture Fiscal/Trabalhista com Econômico-Financeira.
 - Preserve cada certidão individualmente.

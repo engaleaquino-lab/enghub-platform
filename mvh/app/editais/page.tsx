@@ -169,7 +169,11 @@ export default function BidAnalyzerPage() {
       }
     }
 
-    throw lastError || new Error(`Falha em ${label}.`);
+    if (lastError) {
+      throw new Error(`${label}: ${lastError.message}`);
+    }
+
+    throw new Error(`Falha em ${label}.`);
   }
 
   async function analyze() {
@@ -398,7 +402,7 @@ export default function BidAnalyzerPage() {
     } catch (cause: any) {
       setError(cause.message);
       setMessage(
-        "As etapas já concluídas foram preservadas. Clique novamente em Analisar edital para continuar.",
+        "As etapas já concluídas foram preservadas. A mensagem acima informa exatamente qual lote ou módulo falhou. Clique novamente para continuar.",
       );
       setProgressLabel("");
     } finally {
