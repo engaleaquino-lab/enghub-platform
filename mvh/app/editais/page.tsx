@@ -96,9 +96,24 @@ export default function BidAnalyzerPage() {
 
   const statistics = useMemo(() => {
     if (!data) return { documents: 0, technical: 0, risks: 0, checklist: 0 };
+
+    const documents =
+      (data.legal_documents?.length || 0) +
+      (data.fiscal_documents?.length || 0) +
+      (data.labor_documents?.length || 0) +
+      (data.economic_documents?.length || 0) +
+      (data.declarations?.length || 0);
+
+    const technical =
+      (data.crea_legal_entity?.length || 0) +
+      (data.crea_individual?.length || 0) +
+      (data.required_professionals?.length || 0) +
+      (data.cat_requirements?.length || 0) +
+      (data.technical_certificates?.length || 0);
+
     return {
-      documents: data.required_documents?.length || 0,
-      technical: data.technical_requirements?.length || 0,
+      documents,
+      technical,
       risks: data.risks?.length || 0,
       checklist: data.checklist?.length || 0,
     };
@@ -559,25 +574,114 @@ export default function BidAnalyzerPage() {
                 </section>
               </div>
 
-              <div className="analysis-info-grid">
+              <div className="professional-analysis-grid">
                 <section className="card">
-                  <h3>Documentos exigidos</h3>
-                  {list(data.required_documents)}
+                  <h3>Habilitação jurídica</h3>
+                  {list(data.legal_documents)}
                 </section>
 
                 <section className="card">
-                  <h3>Qualificação técnica</h3>
-                  {list(data.technical_requirements)}
+                  <h3>Regularidade fiscal</h3>
+                  {list(data.fiscal_documents)}
                 </section>
 
                 <section className="card">
-                  <h3>Qualificação econômico-financeira</h3>
-                  {list(data.financial_requirements)}
+                  <h3>Regularidade trabalhista</h3>
+                  {list(data.labor_documents)}
+                </section>
+
+                <section className="card">
+                  <h3>CREA da empresa</h3>
+                  {list(data.crea_legal_entity)}
+                </section>
+
+                <section className="card">
+                  <h3>CREA dos profissionais</h3>
+                  {list(data.crea_individual)}
+                </section>
+
+                <section className="card">
+                  <h3>Profissionais exigidos</h3>
+                  {list(data.required_professionals)}
+                </section>
+
+                <section className="card">
+                  <h3>CAT</h3>
+                  {list(data.cat_requirements)}
+                </section>
+
+                <section className="card professional-wide">
+                  <h3>Atestados técnicos exigidos</h3>
+                  <div className="technical-certificate-list">
+                    {(data.technical_certificates || []).map((item: any, index: number) => (
+                      <article className="technical-certificate-item" key={`${item.service}-${index}`}>
+                        <strong>{item.service || "Serviço não identificado"}</strong>
+                        <span>Quantidade mínima: {item.minimum_quantity || "Não informada"}</span>
+                        <span>Percentual mínimo: {item.minimum_percentage || "Não informado"}</span>
+                        <span>Somatório: {item.accepts_sum || "Não identificado"}</span>
+                        <span>Titular exigido: {item.required_holder || "Não identificado"}</span>
+                        {item.observations && <small>{item.observations}</small>}
+                      </article>
+                    ))}
+                    {!data.technical_certificates?.length && (
+                      <div className="empty compact">Nenhum atestado estruturado.</div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="card">
+                  <h3>Documentos econômico-financeiros</h3>
+                  {list(data.economic_documents)}
+                </section>
+
+                <section className="card">
+                  <h3>Índices financeiros</h3>
+                  {list(data.financial_indexes)}
+                </section>
+
+                <section className="card">
+                  <h3>Capital ou patrimônio mínimo</h3>
+                  {list(data.minimum_capital_or_equity)}
+                </section>
+
+                <section className="card">
+                  <h3>Declarações obrigatórias</h3>
+                  {list(data.declarations)}
                 </section>
 
                 <section className="card">
                   <h3>Garantias</h3>
                   {list(data.guarantees)}
+                </section>
+
+                <section className="card">
+                  <h3>Visita técnica</h3>
+                  {list(data.site_visit)}
+                </section>
+
+                <section className="card">
+                  <h3>Execução</h3>
+                  {list(data.execution_conditions)}
+                </section>
+
+                <section className="card">
+                  <h3>Medição</h3>
+                  {list(data.measurement_conditions)}
+                </section>
+
+                <section className="card">
+                  <h3>Pagamento</h3>
+                  {list(data.payment_conditions)}
+                </section>
+
+                <section className="card">
+                  <h3>Reajuste</h3>
+                  {list(data.adjustment_conditions)}
+                </section>
+
+                <section className="card">
+                  <h3>Penalidades</h3>
+                  {list(data.penalties)}
                 </section>
               </div>
 

@@ -35,70 +35,38 @@ const compactBatchSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    object: { type: "string" },
-    agency: { type: "string" },
-    modality: { type: "string" },
-    notice_number: { type: "string" },
-    dates: {
-      type: "array",
-      maxItems: 8,
-      items: { type: "string" },
-    },
-    values: {
-      type: "array",
-      maxItems: 6,
-      items: { type: "string" },
-    },
-    documents: {
-      type: "array",
-      maxItems: 12,
-      items: { type: "string" },
-    },
-    technical_requirements: {
-      type: "array",
-      maxItems: 12,
-      items: { type: "string" },
-    },
-    financial_requirements: {
-      type: "array",
-      maxItems: 8,
-      items: { type: "string" },
-    },
-    guarantees: {
-      type: "array",
-      maxItems: 6,
-      items: { type: "string" },
-    },
-    execution_and_payment: {
-      type: "array",
-      maxItems: 10,
-      items: { type: "string" },
-    },
-    risks_and_restrictions: {
-      type: "array",
-      maxItems: 10,
-      items: { type: "string" },
-    },
-    attention_points: {
-      type: "array",
-      maxItems: 10,
-      items: { type: "string" },
-    },
+    general_data: { type: "array", maxItems: 10, items: { type: "string" } },
+    legal_documents: { type: "array", maxItems: 12, items: { type: "string" } },
+    fiscal_documents: { type: "array", maxItems: 14, items: { type: "string" } },
+    labor_documents: { type: "array", maxItems: 8, items: { type: "string" } },
+    crea_requirements: { type: "array", maxItems: 10, items: { type: "string" } },
+    cat_requirements: { type: "array", maxItems: 10, items: { type: "string" } },
+    technical_certificates: { type: "array", maxItems: 16, items: { type: "string" } },
+    economic_requirements: { type: "array", maxItems: 14, items: { type: "string" } },
+    declarations: { type: "array", maxItems: 14, items: { type: "string" } },
+    guarantees: { type: "array", maxItems: 10, items: { type: "string" } },
+    site_visit: { type: "array", maxItems: 8, items: { type: "string" } },
+    deadlines: { type: "array", maxItems: 12, items: { type: "string" } },
+    execution_payment: { type: "array", maxItems: 14, items: { type: "string" } },
+    penalties: { type: "array", maxItems: 10, items: { type: "string" } },
+    risks_restrictions: { type: "array", maxItems: 12, items: { type: "string" } },
   },
   required: [
-    "object",
-    "agency",
-    "modality",
-    "notice_number",
-    "dates",
-    "values",
-    "documents",
-    "technical_requirements",
-    "financial_requirements",
+    "general_data",
+    "legal_documents",
+    "fiscal_documents",
+    "labor_documents",
+    "crea_requirements",
+    "cat_requirements",
+    "technical_certificates",
+    "economic_requirements",
+    "declarations",
     "guarantees",
-    "execution_and_payment",
-    "risks_and_restrictions",
-    "attention_points",
+    "site_visit",
+    "deadlines",
+    "execution_payment",
+    "penalties",
+    "risks_restrictions",
   ],
 } as const;
 
@@ -112,36 +80,53 @@ const finalSchema = {
     agency: { type: "string" },
     notice_number: { type: "string" },
     modality: { type: "string" },
-    session_date: {
-      anyOf: [{ type: "string" }, { type: "null" }],
-    },
-    estimated_value: {
-      anyOf: [{ type: "number" }, { type: "null" }],
-    },
+    session_date: { anyOf: [{ type: "string" }, { type: "null" }] },
+    estimated_value: { anyOf: [{ type: "number" }, { type: "null" }] },
     execution_deadline: { type: "string" },
     proposal_validity: { type: "string" },
     judgment_criterion: { type: "string" },
-    participation_recommendation: {
-      type: "string",
-      enum: ["Participar", "Analisar com cautela", "Não participar"],
-    },
-    recommendation_reason: { type: "string" },
-    required_documents: {
+
+    legal_documents: { type: "array", items: { type: "string" } },
+    fiscal_documents: { type: "array", items: { type: "string" } },
+    labor_documents: { type: "array", items: { type: "string" } },
+
+    crea_legal_entity: { type: "array", items: { type: "string" } },
+    crea_individual: { type: "array", items: { type: "string" } },
+    required_professionals: { type: "array", items: { type: "string" } },
+
+    cat_requirements: { type: "array", items: { type: "string" } },
+    technical_certificates: {
       type: "array",
-      items: { type: "string" },
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          service: { type: "string" },
+          minimum_quantity: { type: "string" },
+          minimum_percentage: { type: "string" },
+          accepts_sum: { type: "string" },
+          required_holder: { type: "string" },
+          observations: { type: "string" },
+        },
+        required: [
+          "service",
+          "minimum_quantity",
+          "minimum_percentage",
+          "accepts_sum",
+          "required_holder",
+          "observations",
+        ],
+      },
     },
-    technical_requirements: {
-      type: "array",
-      items: { type: "string" },
-    },
-    financial_requirements: {
-      type: "array",
-      items: { type: "string" },
-    },
-    guarantees: {
-      type: "array",
-      items: { type: "string" },
-    },
+
+    economic_documents: { type: "array", items: { type: "string" } },
+    financial_indexes: { type: "array", items: { type: "string" } },
+    minimum_capital_or_equity: { type: "array", items: { type: "string" } },
+
+    declarations: { type: "array", items: { type: "string" } },
+    guarantees: { type: "array", items: { type: "string" } },
+    site_visit: { type: "array", items: { type: "string" } },
+
     deadlines: {
       type: "array",
       items: {
@@ -149,24 +134,32 @@ const finalSchema = {
         additionalProperties: false,
         properties: {
           item: { type: "string" },
-          date: {
-            anyOf: [{ type: "string" }, { type: "null" }],
-          },
+          date: { anyOf: [{ type: "string" }, { type: "null" }] },
           detail: { type: "string" },
         },
         required: ["item", "date", "detail"],
       },
     },
+
+    execution_conditions: { type: "array", items: { type: "string" } },
+    measurement_conditions: { type: "array", items: { type: "string" } },
+    payment_conditions: { type: "array", items: { type: "string" } },
+    adjustment_conditions: { type: "array", items: { type: "string" } },
+    penalties: { type: "array", items: { type: "string" } },
+
+    participation_recommendation: {
+      type: "string",
+      enum: ["Participar", "Analisar com cautela", "Não participar"],
+    },
+    recommendation_reason: { type: "string" },
+
     risks: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
-          level: {
-            type: "string",
-            enum: ["Baixo", "Médio", "Alto"],
-          },
+          level: { type: "string", enum: ["Baixo", "Médio", "Alto"] },
           item: { type: "string" },
           reason: { type: "string" },
         },
@@ -193,22 +186,13 @@ const finalSchema = {
         properties: {
           item: { type: "string" },
           category: { type: "string" },
-          priority: {
-            type: "string",
-            enum: ["Baixa", "Média", "Alta"],
-          },
+          priority: { type: "string", enum: ["Baixa", "Média", "Alta"] },
         },
         required: ["item", "category", "priority"],
       },
     },
-    clarification_questions: {
-      type: "array",
-      items: { type: "string" },
-    },
-    attention_points: {
-      type: "array",
-      items: { type: "string" },
-    },
+    clarification_questions: { type: "array", items: { type: "string" } },
+    attention_points: { type: "array", items: { type: "string" } },
   },
   required: [
     "executive_summary",
@@ -221,13 +205,28 @@ const finalSchema = {
     "execution_deadline",
     "proposal_validity",
     "judgment_criterion",
+    "legal_documents",
+    "fiscal_documents",
+    "labor_documents",
+    "crea_legal_entity",
+    "crea_individual",
+    "required_professionals",
+    "cat_requirements",
+    "technical_certificates",
+    "economic_documents",
+    "financial_indexes",
+    "minimum_capital_or_equity",
+    "declarations",
+    "guarantees",
+    "site_visit",
+    "deadlines",
+    "execution_conditions",
+    "measurement_conditions",
+    "payment_conditions",
+    "adjustment_conditions",
+    "penalties",
     "participation_recommendation",
     "recommendation_reason",
-    "required_documents",
-    "technical_requirements",
-    "financial_requirements",
-    "guarantees",
-    "deadlines",
     "risks",
     "restrictive_clauses",
     "checklist",
@@ -235,6 +234,7 @@ const finalSchema = {
     "attention_points",
   ],
 } as const;
+
 
 type ChatCompletionMessage = {
   content?: string | null;
@@ -675,16 +675,19 @@ async function processBatch(
       instructions: `
 Você analisa uma pequena parte de um edital público brasileiro.
 
-Leia integralmente todos os trechos recebidos, mas responda de forma extremamente compacta.
+Leia integralmente os trechos recebidos e classifique cada exigência na categoria correta.
 
 REGRAS:
-- Registre somente fatos objetivos presentes neste lote.
+- Registre cada documento separadamente.
+- Nunca use termos genéricos como "certidões fiscais" quando o edital nomear certidão federal, estadual, municipal, FGTS ou CNDT.
+- Diferencie CREA da pessoa jurídica e CREA da pessoa física.
+- Em CAT e atestados, preserve serviço, quantitativo, percentual, titular exigido, vínculo e aceitação ou proibição de somatório.
+- Diferencie balanço, DRE, índices, patrimônio líquido e capital social.
+- Preserve datas, valores, percentuais, quantitativos e prazos.
 - Não invente informações.
 - Não repita itens.
-- Cada item deve ter no máximo 180 caracteres.
-- Não explique além do necessário.
-- Quando um campo não aparecer neste lote, use string vazia ou lista vazia.
-- Preserve números, percentuais, quantitativos e datas relevantes.
+- Cada item deve ter no máximo 220 caracteres.
+- Quando uma categoria não aparecer neste lote, use lista vazia.
 - Não conclua que algo não existe apenas porque não apareceu neste lote.
       `.trim(),
       input: `
@@ -807,13 +810,14 @@ async function processMerge(
 Você consolida análises parciais consecutivas do mesmo edital.
 
 REGRAS:
-- Una informações equivalentes.
-- Elimine duplicidades.
-- Preserve números, datas, quantitativos e condições.
-- Mantenha cada item com no máximo 180 caracteres.
-- Limite cada lista aos itens realmente relevantes.
+- Mantenha cada documento individualmente identificado.
+- Não transforme certidão federal, estadual, municipal, FGTS ou CNDT em uma expressão genérica.
+- Preserve separadamente CREA jurídico, CREA dos profissionais, CAT, atestados e respectivos quantitativos.
+- Preserve balanço, DRE, índices e capital ou patrimônio mínimo.
+- Elimine apenas duplicidades reais.
+- Preserve números, datas, percentuais, quantitativos, titulares e condições.
+- Cada item deve ter no máximo 220 caracteres.
 - Não invente informações.
-- Quando houver divergência, preserve as duas informações de forma curta.
       `.trim(),
       input: `
 DOCUMENTO: ${
@@ -912,7 +916,7 @@ async function consolidateAnalysis(
       apiKey,
       schemaName: "enghub_complete_bid_analysis",
       schema: finalSchema,
-      maxOutputTokens: 2400,
+      maxOutputTokens: 4200,
       instructions: `
 Você é um analista sênior de licitações e obras públicas brasileiras.
 
@@ -933,6 +937,16 @@ potencialmente restritivas e explique o motivo.
 
 A recomendação de participação é preliminar e deve considerar
 riscos, habilitação, prazo, execução e clareza do edital.
+
+DETALHAMENTO OBRIGATÓRIO:
+- Liste CNPJ, contrato social, procuração e documentos dos representantes individualmente.
+- Liste Receita Federal/PGFN, Fazenda Estadual, Fazenda Municipal, FGTS e CNDT separadamente quando exigidos.
+- Separe CREA da empresa, CREA de cada profissional, profissionais exigidos e vínculos.
+- Em CAT e atestados, descreva serviço, quantitativo mínimo, percentual, titular, possibilidade de somatório e observações.
+- Separe balanço, DRE, índices, capital social, patrimônio líquido e certidão de falência.
+- Liste cada declaração obrigatória individualmente.
+- Detalhe garantias, visita técnica, prazos, medição, pagamento, reajuste e penalidades.
+- O checklist deve conter um item para cada documento ou providência concreta.
       `.trim(),
       input: `
 DOCUMENTO: ${
