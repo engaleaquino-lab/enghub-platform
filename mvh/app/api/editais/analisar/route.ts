@@ -525,6 +525,12 @@ const finalSchema = {
     "agency",
     "notice_number",
     "modality",
+    "bidding_type",
+    "dispute_format",
+    "platform",
+    "process_number",
+    "execution_regime",
+    "session_location",
     "session_date",
     "estimated_value",
     "execution_deadline",
@@ -568,6 +574,12 @@ const finalGeneralSchema = {
     agency: { type: "string" },
     notice_number: { type: "string" },
     modality: { type: "string" },
+    bidding_type: { type: "string" },
+    dispute_format: { type: "string" },
+    platform: { type: "string" },
+    process_number: { type: "string" },
+    execution_regime: { type: "string" },
+    session_location: { type: "string" },
     session_date: { anyOf: [{ type: "string" }, { type: "null" }] },
     estimated_value: { anyOf: [{ type: "number" }, { type: "null" }] },
     execution_deadline: { type: "string" },
@@ -660,6 +672,91 @@ const finalDeclarationsSchema = {
   required: ["declarations"],
 } as const;
 
+const finalProposalSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    proposal_requirements: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          required: { type: "string" },
+          scope_or_detail: { type: "string" },
+          delivery_stage: { type: "string" },
+          consequence: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "item",
+          "required",
+          "scope_or_detail",
+          "delivery_stage",
+          "consequence",
+          "source_reference",
+        ],
+      },
+    },
+    budget_spreadsheet: { type: "string" },
+    physical_financial_schedule: { type: "string" },
+    bdi_requirement: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        required: { type: "string" },
+        maximum_limit: { type: "string" },
+        reference_value: { type: "string" },
+        detail: { type: "string" },
+        source_reference: { type: "string" },
+      },
+      required: ["required","maximum_limit","reference_value","detail","source_reference"],
+    },
+    unit_cost_compositions: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        required: { type: "string" },
+        scope: { type: "string" },
+        proprietary_items_only: { type: "string" },
+        source_reference: { type: "string" },
+      },
+      required: ["required","scope","proprietary_items_only","source_reference"],
+    },
+    social_charges: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        required: { type: "string" },
+        regime: { type: "string" },
+        detail: { type: "string" },
+        source_reference: { type: "string" },
+      },
+      required: ["required","regime","detail","source_reference"],
+    },
+    proposal_validity_detail: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        period: { type: "string" },
+        consequence: { type: "string" },
+        source_reference: { type: "string" },
+      },
+      required: ["period","consequence","source_reference"],
+    },
+  },
+  required: [
+    "proposal_requirements",
+    "budget_spreadsheet",
+    "physical_financial_schedule",
+    "bdi_requirement",
+    "unit_cost_compositions",
+    "social_charges",
+    "proposal_validity_detail",
+  ],
+} as const;
+
 const finalOperationalSchema = {
   type: "object",
   additionalProperties: false,
@@ -723,8 +820,11 @@ const FINAL_SECTION_CONFIG = [
     maxOutputTokens: 1000,
     instructions: `
 Extraia somente os dados principais:
-objeto, órgão, número, modalidade, sessão, valor estimado,
-prazo de execução, validade da proposta e julgamento.
+objeto, órgão, número do edital, processo, tipo/modalidade da licitação,
+formato presencial ou eletrônico, plataforma do certame, local da sessão,
+regime de execução, data/hora, valor estimado, prazo de execução,
+validade da proposta e critério de julgamento.
+Se eletrônico, identifique a plataforma. Se presencial, registre local/endereço.
 Produza um resumo executivo curto e factual.
     `.trim(),
   },
@@ -806,18 +906,36 @@ Exemplo: ANEXO II — Declaração de Fatos Supervenientes.
     `.trim(),
   },
   {
-    name: "enghub_final_09_operational",
+    name: "enghub_final_09_proposal",
+    schema: finalProposalSchema,
+    maxOutputTokens: 2200,
+    instructions: `
+Audite somente a PROPOSTA COMERCIAL E DE PREÇOS.
+Verifique individualmente planilha orçamentária, cronograma físico-financeiro,
+BDI e limite máximo, composição de custos unitários, CPU de todos os itens
+ou apenas itens próprios, encargos sociais, regime desonerado/não desonerado,
+curva ABC, memorial de cálculo, formatos exigidos e validade da proposta.
+Não presuma obrigatoriedade: classifique conforme a redação literal.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_10_operational",
     schema: finalOperationalSchema,
     maxOutputTokens: 2200,
     instructions: `
 Audite somente:
 garantias, visita/vistoria, prazos, execução, medição,
 pagamento, reajuste e penalidades.
-Destaque se visita ou atestado de vistoria é obrigatório e eliminatório.
+Aplique esta regra objetiva:
+- Se o edital exigir visita/vistoria e não oferecer declaração substitutiva,
+  classifique a vistoria como obrigatória.
+- Se oferecer declaração de não vistoria/conhecimento, escreva:
+  "Será aceita declaração de não vistoria".
+- Informe documento comprobatório e consequência literal.
     `.trim(),
   },
   {
-    name: "enghub_final_10_risks_checklist",
+    name: "enghub_final_11_risks_checklist",
     schema: finalRiskChecklistSchema,
     maxOutputTokens: 3000,
     instructions: `
@@ -2017,7 +2135,7 @@ async function finalizeAnalysis(
   if (sectionsError) throw sectionsError;
 
   if (!sections || sections.length !== FINAL_SECTION_CONFIG.length) {
-    throw new Error("As quatro seções finais ainda não foram criadas.");
+    throw new Error("Todos os módulos finais ainda não foram criados.");
   }
 
   const incomplete = sections.filter(
@@ -2098,6 +2216,92 @@ async function finalizeAnalysis(
       ...source.criticalAudit.disqualification_risks,
     ],
     (value: any) => `${value.item}-${value.evidence}`,
+  );
+
+  const visitText = JSON.stringify(finalAnalysis.site_visit || []).toLowerCase();
+  const hasVisitRequirement =
+    /visita|vistoria|atestado de vistoria|comprovante de visita/.test(visitText);
+  const hasAlternativeDeclaration =
+    /declaracao de nao vistoria|declaração de não vistoria|declaracao de conhecimento|declaração de conhecimento|declaracao substitutiva|declaração substitutiva/.test(visitText);
+
+  finalAnalysis.visit_conclusion = !hasVisitRequirement
+    ? "Não foi localizada exigência de vistoria técnica."
+    : hasAlternativeDeclaration
+      ? "Será aceita declaração de não vistoria, conforme condição identificada no edital."
+      : "A vistoria técnica é obrigatória, pois o edital a exige e não foi localizada declaração substitutiva.";
+
+  const proposalCount = finalAnalysis.proposal_requirements?.length || 0;
+  const technicalCount =
+    (finalAnalysis.crea_requirements?.length || 0) +
+    (finalAnalysis.cat_requirements?.length || 0) +
+    (finalAnalysis.technical_certificates?.length || 0) +
+    (finalAnalysis.other_technical_requirements?.length || 0);
+  const documentCount =
+    (finalAnalysis.credentialing?.length || 0) +
+    (finalAnalysis.legal_qualification?.length || 0) +
+    (finalAnalysis.fiscal_labor_qualification?.length || 0) +
+    (finalAnalysis.economic_financial_qualification?.length || 0) +
+    (finalAnalysis.declarations?.length || 0);
+
+  let complexityScore = 15;
+  complexityScore += Math.min(25, documentCount);
+  complexityScore += Math.min(25, technicalCount * 2);
+  complexityScore += Math.min(15, proposalCount * 2);
+  complexityScore += hasVisitRequirement ? 8 : 0;
+  complexityScore += (finalAnalysis.guarantees?.length || 0) ? 6 : 0;
+  complexityScore += Math.min(6, finalAnalysis.disqualification_risks?.length || 0);
+  complexityScore = Math.max(0, Math.min(100, complexityScore));
+
+  finalAnalysis.complexity = {
+    score: complexityScore,
+    level: complexityScore >= 75 ? "Alta" : complexityScore >= 45 ? "Média" : "Baixa",
+    explanation:
+      "Calculado pela quantidade de documentos, exigências técnicas, itens da proposta, vistoria, garantias e riscos eliminatórios.",
+  };
+
+  const complianceRows: any[] = [];
+  const addCompliance = (
+    category: string,
+    item: string,
+    mandatory: string,
+    consequence: string,
+    reference: string,
+  ) => {
+    if (!item) return;
+    complianceRows.push({
+      category,
+      item,
+      mandatory,
+      status: "A conferir pela empresa",
+      consequence,
+      source_reference: reference || "Referência não identificada",
+    });
+  };
+
+  for (const item of finalAnalysis.credentialing || [])
+    addCompliance("Credenciamento", item.requirement, item.mandatory, item.consequence, item.source_reference);
+  for (const item of finalAnalysis.legal_qualification || [])
+    addCompliance("Habilitação Jurídica", item.document, item.mandatory, "Possível inabilitação", item.source_reference);
+  for (const item of finalAnalysis.fiscal_labor_qualification || [])
+    addCompliance("Fiscal e Trabalhista", item.document, item.mandatory, "Possível inabilitação", item.source_reference);
+  for (const item of finalAnalysis.technical_certificates || [])
+    addCompliance(
+      "Habilitação Técnica",
+      `${item.service} — ${item.minimum_quantity || ""} ${item.unit || ""}`.trim(),
+      "Sim, quando exigido",
+      "Possível inabilitação",
+      item.source_reference,
+    );
+  for (const item of finalAnalysis.declarations || [])
+    addCompliance("Declarações", `${item.annex || ""} — ${item.name}`.trim(), item.mandatory, item.consequence, item.source_reference);
+  for (const item of finalAnalysis.proposal_requirements || [])
+    addCompliance("Proposta", item.item, item.required, item.consequence, item.source_reference);
+  for (const item of finalAnalysis.mandatory_actions || [])
+    addCompliance("Providências", item.item, "Sim", item.consequence, item.evidence);
+
+  finalAnalysis.compliance_matrix = uniqueObjects(
+    complianceRows,
+    (value: any) => `${value.category}-${value.item}`,
   );
 
   const riskLevel = finalAnalysis.risks?.some(

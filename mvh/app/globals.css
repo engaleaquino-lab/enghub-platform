@@ -421,3 +421,17 @@ select.input{appearance:auto}
   .technical-two-columns,
   .declaration-grid{grid-template-columns:1fr}
 }
+
+
+/* Sprint 21 — proposta e matriz */
+.complexity-card{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:16px}
+.complexity-card h3{margin:4px 0}.complexity-card p{margin:0;color:var(--muted)}
+.complexity-card>strong{min-width:94px;height:70px;display:grid;place-items:center;border-radius:14px;background:#17392f;color:#8ff0cb;font-size:1.55rem}
+.proposal-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.proposal-summary-grid article{display:grid;gap:6px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#061522}
+.proposal-summary-grid span{color:var(--muted);font-size:.82rem}.proposal-summary-grid strong{color:var(--text)}
+.visit-conclusion{margin-bottom:12px;padding:12px;border-radius:10px;border:1px solid #b56b2b;background:#2b1a0d;color:#ffd18a}
+.compliance-matrix{margin-top:16px}.compliance-matrix .section-header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
+.compliance-matrix .section-header h3{margin:4px 0 0}.compliance-matrix .section-header>strong{color:var(--green)}
+@media(max-width:1050px){.proposal-summary-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.proposal-summary-grid{grid-template-columns:1fr}.complexity-card{align-items:flex-start;flex-direction:column}}

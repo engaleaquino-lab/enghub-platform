@@ -270,7 +270,7 @@ export default function BidAnalyzerPage() {
         );
       }
 
-      const totalFinalSections = 10;
+      const totalFinalSections = 11;
       const totalSteps = totalBatches + totalMerges + totalFinalSections + 1;
       let completedSteps = completedBatches + completedMerges;
 
@@ -351,6 +351,7 @@ export default function BidAnalyzerPage() {
         "Atestados e demais exigências técnicas",
         "Habilitação Econômico-Financeira",
         "Declarações e Anexos",
+        "Proposta, BDI, CPU e encargos sociais",
         "Garantias, visita, prazos, execução e pagamento",
         "Riscos, itens eliminatórios e checklist final",
       ];
@@ -380,7 +381,7 @@ export default function BidAnalyzerPage() {
         );
       }
 
-      setProgressLabel("Juntando os dez módulos auditados…");
+      setProgressLabel("Juntando os onze módulos auditados…");
 
       const result = await requestStep(
         {
@@ -602,6 +603,12 @@ export default function BidAnalyzerPage() {
                     <div><dt>Órgão</dt><dd>{data.agency || "—"}</dd></div>
                     <div><dt>Edital</dt><dd>{data.notice_number || "—"}</dd></div>
                     <div><dt>Modalidade</dt><dd>{data.modality || "—"}</dd></div>
+                    <div><dt>Tipo da licitação</dt><dd>{data.bidding_type || "—"}</dd></div>
+                    <div><dt>Formato</dt><dd>{data.dispute_format || "—"}</dd></div>
+                    <div><dt>Plataforma</dt><dd>{data.platform || "—"}</dd></div>
+                    <div><dt>Processo</dt><dd>{data.process_number || "—"}</dd></div>
+                    <div><dt>Regime de execução</dt><dd>{data.execution_regime || "—"}</dd></div>
+                    <div><dt>Local da sessão</dt><dd>{data.session_location || "—"}</dd></div>
                     <div><dt>Sessão</dt><dd>{dateBR(data.session_date)}</dd></div>
                     <div><dt>Valor estimado</dt><dd>{data.estimated_value ? money(data.estimated_value) : "—"}</dd></div>
                     <div><dt>Julgamento</dt><dd>{data.judgment_criterion || "—"}</dd></div>
@@ -615,6 +622,15 @@ export default function BidAnalyzerPage() {
                   {list(data.attention_points)}
                 </section>
               </div>
+
+              <section className="card complexity-card">
+                <div>
+                  <span className="eyebrow">COMPLEXIDADE DO EDITAL</span>
+                  <h3>{data.complexity?.level || "Não calculada"}</h3>
+                  <p>{data.complexity?.explanation || "—"}</p>
+                </div>
+                <strong>{data.complexity?.score ?? "—"}/100</strong>
+              </section>
 
               <section className="card knockout-section">
                 <div className="knockout-header">
@@ -815,8 +831,34 @@ export default function BidAnalyzerPage() {
                   </div>
                 </section>
 
+                <section className="card professional-wide">
+                  <h3>7. Proposta Comercial e de Preços</h3>
+                  <div className="proposal-summary-grid">
+                    <article><span>Planilha orçamentária</span><strong>{data.budget_spreadsheet || "Não identificado"}</strong></article>
+                    <article><span>Cronograma físico-financeiro</span><strong>{data.physical_financial_schedule || "Não identificado"}</strong></article>
+                    <article><span>Validade da proposta</span><strong>{data.proposal_validity_detail?.period || data.proposal_validity || "—"}</strong></article>
+                    <article><span>BDI exigido</span><strong>{data.bdi_requirement?.required || "Não identificado"}</strong></article>
+                    <article><span>Limite de BDI</span><strong>{data.bdi_requirement?.maximum_limit || "Não identificado"}</strong></article>
+                    <article><span>Encargos sociais</span><strong>{data.social_charges?.required || "Não identificado"} — {data.social_charges?.regime || "Regime não identificado"}</strong></article>
+                    <article><span>Composição unitária</span><strong>{data.unit_cost_compositions?.required || "Não identificado"}</strong></article>
+                    <article><span>Escopo da CPU</span><strong>{data.unit_cost_compositions?.scope || "Não identificado"}</strong></article>
+                  </div>
+                  <div className="requirement-table">
+                    {(data.proposal_requirements || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`proposal-${index}`}>
+                        <strong>{item.item}</strong>
+                        <span><b>Exigido:</b> {item.required}</span>
+                        <span><b>Detalhe:</b> {item.scope_or_detail}</span>
+                        <span><b>Etapa:</b> {item.delivery_stage}</span>
+                        <span><b>Consequência:</b> {item.consequence}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
                 <section className="card">
-                  <h3>7. Garantias</h3>
+                  <h3>8. Garantias</h3>
                   <div className="requirement-table">
                     {(data.guarantees || []).map((item: any, index: number) => (
                       <article className="requirement-row" key={`guarantee-${index}`}>
@@ -831,7 +873,10 @@ export default function BidAnalyzerPage() {
                 </section>
 
                 <section className="card">
-                  <h3>8. Visita/Vistoria Técnica</h3>
+                  <h3>9. Visita/Vistoria Técnica</h3>
+                  <div className="visit-conclusion">
+                    <strong>{data.visit_conclusion || "Conclusão da vistoria não calculada."}</strong>
+                  </div>
                   <div className="requirement-table">
                     {(data.site_visit || []).map((item: any, index: number) => (
                       <article className="requirement-row" key={`visit-${index}`}>
@@ -848,7 +893,7 @@ export default function BidAnalyzerPage() {
                 </section>
 
                 <section className="card professional-wide">
-                  <h3>9. Execução, Medição e Pagamento</h3>
+                  <h3>10. Execução, Medição e Pagamento</h3>
                   <div className="requirement-table">
                     {(data.execution_measurement_payment || []).map((item: any, index: number) => (
                       <article className="requirement-row" key={`execution-${index}`}>
@@ -862,7 +907,7 @@ export default function BidAnalyzerPage() {
                 </section>
 
                 <section className="card professional-wide">
-                  <h3>10. Penalidades</h3>
+                  <h3>11. Penalidades</h3>
                   <div className="requirement-table">
                     {(data.penalties || []).map((item: any, index: number) => (
                       <article className="requirement-row" key={`penalty-${index}`}>
@@ -875,6 +920,30 @@ export default function BidAnalyzerPage() {
                   </div>
                 </section>
               </div>
+
+              <section className="card professional-wide compliance-matrix">
+                <div className="section-header">
+                  <div>
+                    <span className="eyebrow">MATRIZ DE CONFORMIDADE</span>
+                    <h3>Conferência final antes da participação</h3>
+                  </div>
+                  <strong>{data.compliance_matrix?.length || 0} itens</strong>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Categoria</th><th>Exigência</th><th>Obrigatório</th><th>Status</th><th>Consequência</th><th>Referência</th></tr></thead>
+                    <tbody>
+                      {(data.compliance_matrix || []).map((item: any, index: number) => (
+                        <tr key={`compliance-${index}`}>
+                          <td>{item.category}</td><td>{item.item}</td><td>{item.mandatory}</td>
+                          <td>{item.status}</td><td>{item.consequence}</td><td>{item.source_reference}</td>
+                        </tr>
+                      ))}
+                      {!data.compliance_matrix?.length && <tr><td colSpan={6} className="empty">Matriz ainda não calculada.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
 
               <section className="card">
                 <h3>Prazos e eventos</h3>
