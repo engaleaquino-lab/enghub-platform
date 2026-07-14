@@ -6,6 +6,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const OPENAI_TIMEOUT_MS = 50_000;
+const MAX_EDITAL_CHARS = 48_000;
+
 type AnalysisPayload = {
   executive_summary: string;
   object: string;
@@ -184,7 +187,7 @@ export async function POST(request: NextRequest) {
     const fullText = (chunks || [])
       .map((chunk) => String(chunk.content || ""))
       .join("\n\n")
-      .slice(0, 120_000);
+      .slice(0, MAX_EDITAL_CHARS);
 
     if (fullText.length < 300) {
       return json({
@@ -270,20 +273,49 @@ TEXTO DO EDITAL:
 ${fullText}
 `.trim();
 
-    const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-5-mini",
-        instructions,
-        input,
-        max_output_tokens: 6500,
-        store: false,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
+    let openAIResponse: Response;
+
+    try {
+      openAIResponse = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || "gpt-5-mini",
+          instructions,
+          input,
+          max_output_tokens: 3200,
+          text: {
+            format: {
+              type: "json_object",
+            },
+          },
+          store: false,
+        }),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.name === "AbortError"
+          ? "A análise ultrapassou o tempo disponível. Tente novamente; o texto enviado já foi reduzido automaticamente."
+          : error instanceof Error
+            ? error.message
+            : "Falha de conexão com a OpenAI.";
+
+      await supabase
+        .from("bid_analyses")
+        .update({ status: "Erro", error_message: message })
+        .eq("id", analysisId);
+
+      return json({ error: message }, 504);
+    } finally {
+      clearTimeout(timeout);
+    }
 
     const raw = await openAIResponse.text();
     let payload: any;
@@ -348,9 +380,14 @@ ${fullText}
     return json({ analysis: saved });
   } catch (error) {
     console.error("/api/editais/analisar", error);
-    return json(
-      { error: error instanceof Error ? error.message : "Erro interno." },
-      500,
-    );
+
+    const message =
+      error instanceof SyntaxError
+        ? "A requisição enviada ao Leitor de Editais não é um JSON válido."
+        : error instanceof Error
+          ? error.message
+          : "Erro interno.";
+
+    return json({ error: message }, 500);
   }
 }
