@@ -5,10 +5,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const CHUNKS_PER_BATCH = 3;
-const BATCHES_PER_MERGE = 4;
-const OPENAI_TIMEOUT_MS = 55_000;
-const OPENAI_ATTEMPTS = 2;
+const CHUNKS_PER_BATCH = 1;
+const BATCHES_PER_MERGE = 3;
+const OPENAI_TIMEOUT_MS = 20_000;
+const OPENAI_ATTEMPTS = 1;
 
 type Action =
   | "start"
@@ -339,7 +339,7 @@ async function callStructuredOpenAI(args: {
 
       if (lastError.name === "AbortError") {
         lastError = new Error(
-          "A chamada à IA ultrapassou o tempo disponível.",
+          "Esta etapa ultrapassou 20 segundos e será repetida pela tela.",
         );
       }
 
@@ -587,7 +587,7 @@ async function processBatch(
       apiKey,
       schemaName: "enghub_bid_batch",
       schema: extractionSchema,
-      maxOutputTokens: 1800,
+      maxOutputTokens: 900,
       instructions: `
 Você analisa uma parte de um edital público brasileiro.
 
@@ -717,7 +717,7 @@ async function processMerge(
       apiKey,
       schemaName: "enghub_bid_merge",
       schema: extractionSchema,
-      maxOutputTokens: 2200,
+      maxOutputTokens: 1300,
       instructions: `
 Você consolida análises parciais consecutivas do mesmo edital.
 
@@ -826,7 +826,7 @@ async function consolidateAnalysis(
       apiKey,
       schemaName: "enghub_complete_bid_analysis",
       schema: finalSchema,
-      maxOutputTokens: 4800,
+      maxOutputTokens: 3000,
       instructions: `
 Você é um analista sênior de licitações e obras públicas brasileiras.
 

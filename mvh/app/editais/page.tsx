@@ -127,6 +127,37 @@ export default function BidAnalyzerPage() {
     return data;
   }
 
+  function wait(milliseconds: number) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
+
+  async function requestStep(
+    payload: Record<string, unknown>,
+    label: string,
+  ) {
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        return await requestAnalysis(payload);
+      } catch (cause: any) {
+        lastError =
+          cause instanceof Error
+            ? cause
+            : new Error(String(cause || "Falha na etapa."));
+
+        if (attempt < 3) {
+          setProgressLabel(
+            `${label} — nova tentativa ${attempt + 1} de 3…`,
+          );
+          await wait(1200 * attempt);
+        }
+      }
+    }
+
+    throw lastError || new Error(`Falha em ${label}.`);
+  }
+
   async function analyze() {
     if (!selectedDocument) {
       setError("Selecione um edital da Biblioteca Inteligente.");
@@ -139,7 +170,7 @@ export default function BidAnalyzerPage() {
       setProgress(0);
       setProgressLabel("Preparando a análise integral…");
       setMessage(
-        "O edital inteiro será lido em lotes menores e consolidado em etapas.",
+        "O edital inteiro será processado em chamadas curtas e independentes, evitando o limite da Vercel.",
       );
 
       const start = await requestAnalysis({
@@ -172,11 +203,14 @@ export default function BidAnalyzerPage() {
           `Lendo o edital: lote ${batchIndex + 1} de ${totalBatches}…`,
         );
 
-        await requestAnalysis({
-          action: "process_batch",
-          analysis_id: analysisId,
-          batch_index: batchIndex,
-        });
+        await requestStep(
+          {
+            action: "process_batch",
+            analysis_id: analysisId,
+            batch_index: batchIndex,
+          },
+          `Lote ${batchIndex + 1}`,
+        );
 
         completedSteps += 1;
         setProgress(
@@ -193,11 +227,14 @@ export default function BidAnalyzerPage() {
           `Organizando resultados: grupo ${mergeIndex + 1} de ${totalMerges}…`,
         );
 
-        await requestAnalysis({
-          action: "process_merge",
-          analysis_id: analysisId,
-          merge_index: mergeIndex,
-        });
+        await requestStep(
+          {
+            action: "process_merge",
+            analysis_id: analysisId,
+            merge_index: mergeIndex,
+          },
+          `Consolidação ${mergeIndex + 1}`,
+        );
 
         completedSteps += 1;
         setProgress(
@@ -207,10 +244,13 @@ export default function BidAnalyzerPage() {
 
       setProgressLabel("Montando a análise final do edital…");
 
-      const result = await requestAnalysis({
-        action: "consolidate",
-        analysis_id: analysisId,
-      });
+      const result = await requestStep(
+        {
+          action: "consolidate",
+          analysis_id: analysisId,
+        },
+        "Análise final",
+      );
 
       completedSteps += 1;
       setProgress(100);
