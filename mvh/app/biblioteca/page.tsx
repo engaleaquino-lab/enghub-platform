@@ -168,7 +168,10 @@ export default function LibraryPage() {
   async function openFile(document: LibraryDocument) {
     if (!document.storage_path) return;
     try {
-      const url = await getSignedFileUrl(document.storage_path);
+      const url = await getSignedFileUrl(
+  "contract-files",
+  document.storage_path
+);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (cause: any) {
       setError(cause.message);
