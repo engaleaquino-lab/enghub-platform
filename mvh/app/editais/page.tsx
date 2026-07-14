@@ -170,7 +170,7 @@ export default function BidAnalyzerPage() {
       setProgress(0);
       setProgressLabel("Verificando análise anterior…");
       setMessage(
-        "O sistema verificará se existem etapas concluídas antes de iniciar.",
+        "O sistema retomará o progresso e usará respostas compactas para evitar cortes.",
       );
 
       const resumeResult = await requestAnalysis({
@@ -238,7 +238,7 @@ export default function BidAnalyzerPage() {
         );
 
         setMessage(
-          "Nova análise criada. O edital inteiro será processado em etapas.",
+          "Nova análise criada. Todos os trechos serão lidos com respostas compactas.",
         );
       }
 

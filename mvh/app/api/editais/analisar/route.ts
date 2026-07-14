@@ -31,53 +31,77 @@ function json(data: unknown, status = 200) {
   return Response.json(data, { status });
 }
 
-const findingItemSchema = {
+const compactBatchSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    category: {
-      type: "string",
-      enum: [
-        "Objeto",
-        "Órgão",
-        "Edital",
-        "Modalidade",
-        "Valor",
-        "Data",
-        "Habilitação jurídica",
-        "Regularidade fiscal",
-        "Qualificação técnica",
-        "Qualificação econômico-financeira",
-        "Garantia",
-        "Proposta",
-        "Execução",
-        "Medição",
-        "Pagamento",
-        "Sanção",
-        "Risco",
-        "Cláusula potencialmente restritiva",
-        "Pedido de esclarecimento",
-        "Outro",
-      ],
+    object: { type: "string" },
+    agency: { type: "string" },
+    modality: { type: "string" },
+    notice_number: { type: "string" },
+    dates: {
+      type: "array",
+      maxItems: 8,
+      items: { type: "string" },
     },
-    fact: { type: "string" },
-    evidence: { type: "string" },
+    values: {
+      type: "array",
+      maxItems: 6,
+      items: { type: "string" },
+    },
+    documents: {
+      type: "array",
+      maxItems: 12,
+      items: { type: "string" },
+    },
+    technical_requirements: {
+      type: "array",
+      maxItems: 12,
+      items: { type: "string" },
+    },
+    financial_requirements: {
+      type: "array",
+      maxItems: 8,
+      items: { type: "string" },
+    },
+    guarantees: {
+      type: "array",
+      maxItems: 6,
+      items: { type: "string" },
+    },
+    execution_and_payment: {
+      type: "array",
+      maxItems: 10,
+      items: { type: "string" },
+    },
+    risks_and_restrictions: {
+      type: "array",
+      maxItems: 10,
+      items: { type: "string" },
+    },
+    attention_points: {
+      type: "array",
+      maxItems: 10,
+      items: { type: "string" },
+    },
   },
-  required: ["category", "fact", "evidence"],
+  required: [
+    "object",
+    "agency",
+    "modality",
+    "notice_number",
+    "dates",
+    "values",
+    "documents",
+    "technical_requirements",
+    "financial_requirements",
+    "guarantees",
+    "execution_and_payment",
+    "risks_and_restrictions",
+    "attention_points",
+  ],
 } as const;
 
-const extractionSchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    summary: { type: "string" },
-    findings: {
-      type: "array",
-      items: findingItemSchema,
-    },
-  },
-  required: ["summary", "findings"],
-} as const;
 
 const finalSchema = {
   type: "object",
@@ -646,21 +670,22 @@ async function processBatch(
     const partial = await callStructuredOpenAI({
       apiKey,
       schemaName: "enghub_bid_batch",
-      schema: extractionSchema,
-      maxOutputTokens: 900,
+      schema: compactBatchSchema,
+      maxOutputTokens: 650,
       instructions: `
-Você analisa uma parte de um edital público brasileiro.
+Você analisa uma pequena parte de um edital público brasileiro.
 
-Leia integralmente todos os trechos recebidos.
+Leia integralmente todos os trechos recebidos, mas responda de forma extremamente compacta.
 
-Extraia fatos objetivos, exigências, condições, prazos,
-quantitativos e riscos presentes neste lote.
-
-Não conclua que algo inexiste apenas porque não apareceu
-neste lote. Não invente informações. Não repita fatos.
-
-Em "evidence", registre uma frase curta que permita localizar
-a informação no trecho analisado.
+REGRAS:
+- Registre somente fatos objetivos presentes neste lote.
+- Não invente informações.
+- Não repita itens.
+- Cada item deve ter no máximo 180 caracteres.
+- Não explique além do necessário.
+- Quando um campo não aparecer neste lote, use string vazia ou lista vazia.
+- Preserve números, percentuais, quantitativos e datas relevantes.
+- Não conclua que algo não existe apenas porque não apareceu neste lote.
       `.trim(),
       input: `
 DOCUMENTO: ${
@@ -776,18 +801,19 @@ async function processMerge(
     const merged = await callStructuredOpenAI({
       apiKey,
       schemaName: "enghub_bid_merge",
-      schema: extractionSchema,
-      maxOutputTokens: 1300,
+      schema: compactBatchSchema,
+      maxOutputTokens: 900,
       instructions: `
 Você consolida análises parciais consecutivas do mesmo edital.
 
-Una todos os fatos sem perder informações, quantitativos,
-datas, exigências ou condições.
-
-Elimine apenas duplicidades reais. Preserve divergências
-quando os dados se referirem a situações diferentes.
-
-Não invente informações e mantenha evidências curtas.
+REGRAS:
+- Una informações equivalentes.
+- Elimine duplicidades.
+- Preserve números, datas, quantitativos e condições.
+- Mantenha cada item com no máximo 180 caracteres.
+- Limite cada lista aos itens realmente relevantes.
+- Não invente informações.
+- Quando houver divergência, preserve as duas informações de forma curta.
       `.trim(),
       input: `
 DOCUMENTO: ${
@@ -886,11 +912,11 @@ async function consolidateAnalysis(
       apiKey,
       schemaName: "enghub_complete_bid_analysis",
       schema: finalSchema,
-      maxOutputTokens: 3000,
+      maxOutputTokens: 2400,
       instructions: `
 Você é um analista sênior de licitações e obras públicas brasileiras.
 
-Produza a análise final usando as consolidações que representam
+Produza a análise final usando as consolidações compactas que representam
 TODOS os trechos do edital.
 
 Elimine duplicidades sem perder detalhes, quantitativos,
