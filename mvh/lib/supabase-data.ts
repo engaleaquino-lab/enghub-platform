@@ -1,15 +1,24 @@
-import { supabaseBrowser } from "./supabase-browser";
 "use client";
 
 import { supabaseBrowser } from "./supabase-browser";
 
 export async function currentOrg() {
-  const s = supabaseBrowser();
-  const { data: { user } } = await s.auth.getUser();
+  const supabase = supabaseBrowser();
 
-  if (!user) throw new Error("Usuário não autenticado.");
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  const { data, error } = await s
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error("Usuário não autenticado.");
+  }
+
+  const { data, error } = await supabase
     .from("organization_members")
     .select("organization_id")
     .eq("user_id", user.id)
@@ -17,35 +26,48 @@ export async function currentOrg() {
     .limit(1)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
 
-  return { orgId: data.organization_id, userId: user.id };
+  return {
+    orgId: data.organization_id,
+    userId: user.id,
+  };
 }
 
 export async function listRows(
   table: string,
   filters: Record<string, string> = {},
 ) {
-  const s = supabaseBrowser();
-  let query = s.from(table).select("*").order("created_at", { ascending: false });
+  const supabase = supabaseBrowser();
+
+  let query = supabase
+    .from(table)
+    .select("*")
+    .order("created_at", { ascending: false });
 
   Object.entries(filters).forEach(([key, value]) => {
     query = query.eq(key, value);
   });
 
   const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 export async function insertRow(
   table: string,
   row: Record<string, unknown>,
 ) {
-  const s = supabaseBrowser();
+  const supabase = supabaseBrowser();
   const { orgId, userId } = await currentOrg();
 
-  const { data, error } = await s
+  const { data, error } = await supabase
     .from(table)
     .insert({
       ...row,
@@ -55,7 +77,10 @@ export async function insertRow(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
+
   return data;
 }
 
@@ -64,46 +89,65 @@ export async function updateRow(
   id: string,
   row: Record<string, unknown>,
 ) {
-  const s = supabaseBrowser();
+  const supabase = supabaseBrowser();
 
-  const { data, error } = await s
+  const { data, error } = await supabase
     .from(table)
     .update(row)
     .eq("id", id)
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
+
   return data;
 }
 
-export async function deleteRow(table: string, id: string) {
-  const s = supabaseBrowser();
-  const { error } = await s.from(table).delete().eq("id", id);
-  if (error) throw error;
+export async function deleteRow(
+  table: string,
+  id: string,
+) {
+  const supabase = supabaseBrowser();
+
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    throw error;
+  }
 }
 
-export async function updateContractTotals(contractId: string) {
-  const s = supabaseBrowser();
+export async function updateContractTotals(
+  contractId: string,
+) {
+  const supabase = supabaseBrowser();
 
-  const { data, error } = await s
+  const { data, error } = await supabase
     .from("measurements")
     .select("measured_value,received_value")
     .eq("contract_id", contractId);
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
 
-  const measured = (data || []).reduce(
-    (total, row) => total + Number(row.measured_value || 0),
+  const measured = (data ?? []).reduce(
+    (total, row) =>
+      total + Number(row.measured_value ?? 0),
     0,
   );
 
-  const received = (data || []).reduce(
-    (total, row) => total + Number(row.received_value || 0),
+  const received = (data ?? []).reduce(
+    (total, row) =>
+      total + Number(row.received_value ?? 0),
     0,
   );
 
-  const { error: updateError } = await s
+  const { error: updateError } = await supabase
     .from("contracts")
     .update({
       measured_value: measured,
@@ -111,22 +155,37 @@ export async function updateContractTotals(contractId: string) {
     })
     .eq("id", contractId);
 
-  if (updateError) throw updateError;
+  if (updateError) {
+    throw updateError;
+  }
 }
 
-export async function uploadFile(contractId: string, file: File) {
-  const s = supabaseBrowser();
+export async function uploadFile(
+  contractId: string,
+  file: File,
+) {
+  const supabase = supabaseBrowser();
   const { orgId, userId } = await currentOrg();
-  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${orgId}/${contractId}/${crypto.randomUUID()}-${safe}`;
 
-  const { error: uploadError } = await s.storage
+  const safeName = file.name.replace(
+    /[^a-zA-Z0-9._-]/g,
+    "_",
+  );
+
+  const storagePath =
+    `${orgId}/${contractId}/${crypto.randomUUID()}-${safeName}`;
+
+  const { error: uploadError } = await supabase.storage
     .from("contract-files")
-    .upload(path, file);
+    .upload(storagePath, file, {
+      upsert: false,
+    });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    throw uploadError;
+  }
 
-  const { data, error } = await s
+  const { data, error } = await supabase
     .from("contract_documents")
     .insert({
       organization_id: orgId,
@@ -134,35 +193,74 @@ export async function uploadFile(contractId: string, file: File) {
       name: file.name,
       category: "Arquivo",
       status: "Válido",
-      storage_path: path,
+      storage_path: storagePath,
       created_by: userId,
     })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
+
   return data;
 }
 
-export function money(value: number) {
-  return Number(value || 0).toLocaleString("pt-BR", {
+export async function getSignedFileUrl(
+  bucket: string,
+  path: string,
+) {
+  if (!bucket) {
+    throw new Error("Bucket não informado.");
+  }
+
+  if (!path) {
+    throw new Error("Caminho do arquivo não informado.");
+  }
+
+  const supabase = supabaseBrowser();
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(path, 3600);
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.signedUrl) {
+    throw new Error(
+      "Não foi possível gerar o link temporário do arquivo.",
+    );
+  }
+
+  return data.signedUrl;
+}
+
+export function money(
+  value: number | string | null | undefined,
+) {
+  return Number(value ?? 0).toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
   });
 }
 
-export function dateBR(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR");
-}
-export async function getSignedFileUrl(
-  bucket: string,
-  path: string
+export function dateBR(
+  value?: string | null,
 ) {
-  const { data } = await supabaseBrowser.storage
-    .from(bucket)
-    .createSignedUrl(path, 3600);
+  if (!value) {
+    return "—";
+  }
 
-  return data?.signedUrl ?? "";
+  const normalizedValue = value.slice(0, 10);
+  const date = new Date(
+    `${normalizedValue}T12:00:00`,
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleDateString("pt-BR");
 }
