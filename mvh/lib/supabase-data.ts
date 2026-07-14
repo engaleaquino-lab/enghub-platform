@@ -1,3 +1,4 @@
+import { supabaseBrowser } from "./supabase-browser";
 "use client";
 
 import { supabaseBrowser } from "./supabase-browser";
