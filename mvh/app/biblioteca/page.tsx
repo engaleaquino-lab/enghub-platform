@@ -55,6 +55,7 @@ export default function LibraryPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -119,13 +120,16 @@ export default function LibraryPage() {
       setLoading(true);
       setError("");
       setMessage("Enviando e processando o documento…");
+      setUploadProgress("Preparando arquivo");
       let extractedText = "";
       if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
         setMessage("Lendo o PDF no navegador…");
+        setUploadProgress("Extraindo texto do PDF");
         extractedText = await extractPdfInBrowser(file);
       }
 
       setMessage("Enviando o arquivo para a biblioteca…");
+      setUploadProgress("Enviando ao armazenamento seguro");
       const { orgId } = await currentOrg();
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const storagePath = `${orgId}/library/${crypto.randomUUID()}-${safeName}`;
@@ -137,6 +141,7 @@ export default function LibraryPage() {
       if (storageError) throw storageError;
 
       setMessage("Extraindo, classificando e indexando o conteúdo…");
+      setUploadProgress("Classificando e indexando");
       const response = await fetch("/api/biblioteca/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -149,17 +154,20 @@ export default function LibraryPage() {
           contract_id: String(form.get("contract_id") || ""),
           issue_date: String(form.get("issue_date") || ""),
           expiry_date: String(form.get("expiry_date") || ""),
+          description: String(form.get("description") || ""),
           extracted_text: extractedText,
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Falha no processamento.");
       setMessage(`Documento processado. ${payload.chunks || 0} trecho(s) disponibilizado(s) ao Copiloto.`);
+      setUploadProgress("");
       setOpen(false);
       await load();
     } catch (cause: any) {
       setError(cause.message);
       setMessage("");
+      setUploadProgress("");
     } finally {
       setLoading(false);
     }
@@ -169,9 +177,9 @@ export default function LibraryPage() {
     if (!document.storage_path) return;
     try {
       const url = await getSignedFileUrl(
-  "contract-files",
-  document.storage_path
-);
+        "contract-files",
+        document.storage_path,
+      );
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (cause: any) {
       setError(cause.message);
@@ -269,6 +277,17 @@ export default function LibraryPage() {
             <span className="muted">PDF, DOCX, Excel, CSV, texto ou imagem. O envio é feito diretamente ao armazenamento seguro.</span>
           </div>
 
+          <div className="field full">
+            <label>Descrição ou observação (opcional)</label>
+            <textarea
+              className="input"
+              name="description"
+              rows={3}
+              maxLength={800}
+              placeholder="Ex.: Edital da Prefeitura de Jaraguari para cobertura metálica."
+            />
+          </div>
+
           <div className="field">
             <label>Categoria (opcional)</label>
             <select className="input" name="category">
@@ -293,8 +312,17 @@ export default function LibraryPage() {
           <div className="field"><label>Data de emissão</label><input className="input" name="issue_date" type="date" /></div>
           <div className="field"><label>Data de validade</label><input className="input" name="expiry_date" type="date" /></div>
 
+          {loading && uploadProgress && (
+            <div className="full upload-progress">
+              <span className="upload-progress-dot" />
+              <strong>{uploadProgress}</strong>
+            </div>
+          )}
+
           <div className="full actions">
-            <button className="btn" disabled={loading}>{loading ? "Processando…" : "Enviar e indexar"}</button>
+            <button className="btn" disabled={loading}>
+              {loading ? "Processando…" : "Enviar e indexar"}
+            </button>
           </div>
         </form>
       </Modal>

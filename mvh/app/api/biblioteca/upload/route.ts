@@ -78,12 +78,23 @@ export async function POST(request: NextRequest) {
     const name = String(body.name || "");
     const mimeType = String(body.mime_type || "");
     const fileSize = Number(body.file_size || 0);
+    const description = String(body.description || "").trim();
     const contractId = String(body.contract_id || "") || null;
     const issueDate = String(body.issue_date || "") || null;
     const expiryDate = String(body.expiry_date || "") || null;
     let text = String(body.extracted_text || "");
 
-    if (!storagePath || !name) return json({ error: "Arquivo enviado não identificado." }, 400);
+    if (!storagePath || !name) {
+      return json({ error: "Arquivo enviado não identificado." }, 400);
+    }
+
+    if (fileSize <= 0) {
+      return json({ error: "O arquivo está vazio." }, 400);
+    }
+
+    if (fileSize > 30 * 1024 * 1024) {
+      return json({ error: "O arquivo deve ter no máximo 30 MB." }, 400);
+    }
 
     const { data: membership, error: membershipError } = await supabase
       .from("organization_members").select("organization_id")
@@ -106,7 +117,11 @@ export async function POST(request: NextRequest) {
     }
 
     const category = String(body.category || "") || classify(name, text);
-    const summary = makeSummary(text, category);
+    const extractedSummary = makeSummary(text, category);
+    const summary = description
+      ? `${description}\n\n${extractedSummary}`.slice(0, 1800)
+      : extractedSummary;
+
     const { data: document, error: documentError } = await supabase.from("company_documents").insert({
       organization_id: organizationId, contract_id: contractId, user_id: user.id,
       name, category, mime_type: mimeType || null, file_size: fileSize,
@@ -114,7 +129,10 @@ export async function POST(request: NextRequest) {
       status: expiryDate && new Date(`${expiryDate}T23:59:59`) < new Date() ? "Vencido" : "Válido",
       processing_status: processingStatus, summary,
     }).select().single();
-    if (documentError) return json({ error: documentError.message }, 400);
+    if (documentError) {
+      await supabase.storage.from("contract-files").remove([storagePath]);
+      return json({ error: documentError.message }, 400);
+    }
 
     const chunks = chunkText(text);
     if (chunks.length) {
