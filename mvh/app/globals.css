@@ -304,3 +304,59 @@ select.input{appearance:auto}
   .technical-certificate-list{grid-template-columns:1fr}
   .professional-wide{grid-column:auto}
 }
+
+
+/* Sprint 16 — auditoria de itens eliminatórios */
+.knockout-section{
+  margin-bottom:16px;
+  border-color:#b56b2b;
+  background:linear-gradient(180deg,#2b1a0d 0%,#101d27 100%);
+}
+.knockout-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:16px;
+}
+.knockout-header h3{margin:4px 0 0}
+.knockout-header > strong{
+  min-width:48px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:#ffbd59;
+  color:#241400;
+  font-size:1.4rem;
+}
+.knockout-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+}
+.knockout-grid article{
+  display:grid;
+  align-content:start;
+  gap:10px;
+}
+.knockout-grid h4{margin:0}
+.knockout-item{
+  display:grid;
+  gap:6px;
+  padding:12px;
+  border-radius:10px;
+  border:1px solid #8a572e;
+  background:#151d24;
+}
+.knockout-item strong{color:#ffd18a}
+.knockout-item span{color:var(--text)}
+.knockout-item small{color:var(--muted)}
+.knockout-item.danger{
+  border-color:#a94c4c;
+  background:#281313;
+}
+.knockout-item.danger strong{color:#ff9c9c}
+@media(max-width:1050px){
+  .knockout-grid{grid-template-columns:1fr}
+}

@@ -193,6 +193,51 @@ const finalSchema = {
     },
     clarification_questions: { type: "array", items: { type: "string" } },
     attention_points: { type: "array", items: { type: "string" } },
+
+    mandatory_documents: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          consequence: { type: "string" },
+          evidence: { type: "string" },
+        },
+        required: ["item", "consequence", "evidence"],
+      },
+    },
+    mandatory_actions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          deadline: { type: "string" },
+          consequence: { type: "string" },
+          evidence: { type: "string" },
+        },
+        required: ["item", "deadline", "consequence", "evidence"],
+      },
+    },
+    disqualification_risks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          type: {
+            type: "string",
+            enum: ["Inabilitação", "Desclassificação", "Impedimento", "Outro"],
+          },
+          reason: { type: "string" },
+          evidence: { type: "string" },
+        },
+        required: ["item", "type", "reason", "evidence"],
+      },
+    },
   },
   required: [
     "executive_summary",
@@ -232,6 +277,9 @@ const finalSchema = {
     "checklist",
     "clarification_questions",
     "attention_points",
+    "mandatory_documents",
+    "mandatory_actions",
+    "disqualification_risks",
   ],
 } as const;
 
@@ -873,6 +921,238 @@ ${JSON.stringify(batches)}
   }
 }
 
+
+type CriticalAudit = {
+  mandatory_documents: Array<{
+    item: string;
+    consequence: string;
+    evidence: string;
+  }>;
+  mandatory_actions: Array<{
+    item: string;
+    deadline: string;
+    consequence: string;
+    evidence: string;
+  }>;
+  disqualification_risks: Array<{
+    item: string;
+    type: "Inabilitação" | "Desclassificação" | "Impedimento" | "Outro";
+    reason: string;
+    evidence: string;
+  }>;
+  forced_fiscal_documents: string[];
+  forced_site_visit: string[];
+  forced_checklist: Array<{
+    item: string;
+    category: string;
+    priority: "Alta";
+  }>;
+};
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function evidenceAround(text: string, index: number, radius = 220) {
+  const start = Math.max(0, index - radius);
+  const end = Math.min(text.length, index + radius);
+  return text.slice(start, end).replace(/\s+/g, " ").trim();
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean)),
+  );
+}
+
+function uniqueObjects<T extends Record<string, unknown>>(
+  values: T[],
+  keyBuilder: (value: T) => string,
+) {
+  const seen = new Set<string>();
+
+  return values.filter((value) => {
+    const key = keyBuilder(value).toLowerCase().trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function auditCriticalRequirements(fullText: string): CriticalAudit {
+  const normalized = normalizeSearchText(fullText).toLowerCase();
+
+  const audit: CriticalAudit = {
+    mandatory_documents: [],
+    mandatory_actions: [],
+    disqualification_risks: [],
+    forced_fiscal_documents: [],
+    forced_site_visit: [],
+    forced_checklist: [],
+  };
+
+  const cndtPatterns = [
+    /certidao negativa de debitos trabalhistas/g,
+    /certidao positiva com efeito de negativa de debitos trabalhistas/g,
+    /\bcndt\b/g,
+    /regularidade trabalhista/g,
+    /debitos trabalhistas/g,
+  ];
+
+  for (const pattern of cndtPatterns) {
+    for (const match of normalized.matchAll(pattern)) {
+      const evidence = evidenceAround(fullText, match.index || 0);
+
+      audit.forced_fiscal_documents.push(
+        "Certidão Negativa de Débitos Trabalhistas (CNDT), ou certidão positiva com efeito de negativa, quando admitida.",
+      );
+
+      audit.mandatory_documents.push({
+        item: "Certidão Negativa de Débitos Trabalhistas (CNDT)",
+        consequence:
+          "A ausência pode causar inabilitação quando exigida na fase de habilitação.",
+        evidence,
+      });
+
+      audit.disqualification_risks.push({
+        item: "CNDT / regularidade trabalhista",
+        type: "Inabilitação",
+        reason:
+          "Documento de regularidade trabalhista identificado no edital e potencialmente eliminatório.",
+        evidence,
+      });
+
+      audit.forced_checklist.push({
+        item: "Emitir e conferir validade da CNDT",
+        category: "Regularidade trabalhista",
+        priority: "Alta",
+      });
+    }
+  }
+
+  const visitPatterns = [
+    /visita tecnica/g,
+    /vistoria tecnica/g,
+    /atestado de vistoria/g,
+    /declaracao de vistoria/g,
+    /termo de vistoria/g,
+    /comprovante de visita/g,
+  ];
+
+  for (const pattern of visitPatterns) {
+    for (const match of normalized.matchAll(pattern)) {
+      const evidence = evidenceAround(fullText, match.index || 0);
+      const local = normalizeSearchText(evidence).toLowerCase();
+
+      const mandatory =
+        /obrigator|devera|deve ser|condicao de participacao|sob pena|inabilit|desclassific/.test(
+          local,
+        );
+
+      const consequence = /desclassific/.test(local)
+        ? "Desclassificação"
+        : /inabilit/.test(local)
+          ? "Inabilitação"
+          : mandatory
+            ? "Risco de eliminação por descumprimento"
+            : "Verificar se é obrigatória ou substituível por declaração";
+
+      audit.forced_site_visit.push(
+        mandatory
+          ? "Visita/vistoria técnica obrigatória identificada. Conferir agendamento, responsável, prazo e documento comprobatório."
+          : "Visita/vistoria técnica mencionada. Confirmar se é facultativa, obrigatória ou substituível por declaração.",
+      );
+
+      audit.mandatory_actions.push({
+        item: "Realizar visita/vistoria técnica e obter o respectivo atestado ou comprovante",
+        deadline: "Conferir data, horário e antecedência definidos no edital",
+        consequence,
+        evidence,
+      });
+
+      audit.disqualification_risks.push({
+        item: "Visita técnica / atestado de vistoria",
+        type: /desclassific/.test(local)
+          ? "Desclassificação"
+          : /inabilit/.test(local)
+            ? "Inabilitação"
+            : "Outro",
+        reason: mandatory
+          ? "A redação indica caráter obrigatório ou consequência eliminatória."
+          : "A exigência foi localizada e precisa ser confirmada antes da participação.",
+        evidence,
+      });
+
+      audit.forced_checklist.push({
+        item: "Agendar e realizar visita/vistoria técnica",
+        category: "Providência obrigatória",
+        priority: "Alta",
+      });
+
+      audit.forced_checklist.push({
+        item: "Obter atestado, termo ou comprovante de vistoria",
+        category: "Documento técnico",
+        priority: "Alta",
+      });
+    }
+  }
+
+  const eliminationPatterns = [
+    /sob pena de inabilitacao/g,
+    /sera inabilitad[oa]/g,
+    /sob pena de desclassificacao/g,
+    /sera desclassificad[oa]/g,
+    /implicara a inabilitacao/g,
+    /implicara a desclassificacao/g,
+  ];
+
+  for (const pattern of eliminationPatterns) {
+    for (const match of normalized.matchAll(pattern)) {
+      const evidence = evidenceAround(fullText, match.index || 0);
+      const local = normalizeSearchText(evidence).toLowerCase();
+
+      audit.disqualification_risks.push({
+        item: "Exigência com consequência eliminatória expressa",
+        type: /desclassific/.test(local)
+          ? "Desclassificação"
+          : /inabilit/.test(local)
+            ? "Inabilitação"
+            : "Outro",
+        reason:
+          "O edital contém redação expressa de eliminação pelo descumprimento.",
+        evidence,
+      });
+    }
+  }
+
+  audit.mandatory_documents = uniqueObjects(
+    audit.mandatory_documents,
+    (value) => `${value.item}-${value.evidence}`,
+  );
+  audit.mandatory_actions = uniqueObjects(
+    audit.mandatory_actions,
+    (value) => `${value.item}-${value.evidence}`,
+  );
+  audit.disqualification_risks = uniqueObjects(
+    audit.disqualification_risks,
+    (value) => `${value.item}-${value.evidence}`,
+  );
+  audit.forced_fiscal_documents = uniqueStrings(
+    audit.forced_fiscal_documents,
+  );
+  audit.forced_site_visit = uniqueStrings(audit.forced_site_visit);
+  audit.forced_checklist = uniqueObjects(
+    audit.forced_checklist,
+    (value) => `${value.category}-${value.item}`,
+  );
+
+  return audit;
+}
+
 async function consolidateAnalysis(
   analysisId: string,
   apiKey: string,
@@ -880,6 +1160,23 @@ async function consolidateAnalysis(
 ) {
   const { supabase, organizationId } = context;
   const analysis = await getAnalysis(analysisId, context);
+
+  const { data: auditChunks, error: auditChunksError } = await supabase
+    .from("document_chunks")
+    .select("chunk_index,content")
+    .eq("document_id", analysis.document_id)
+    .eq("organization_id", organizationId)
+    .order("chunk_index", { ascending: true });
+
+  if (auditChunksError) throw auditChunksError;
+
+  const completeDocumentText = (auditChunks || [])
+    .map((chunk) => String(chunk.content || ""))
+    .join("\n\n");
+
+  const criticalAudit = auditCriticalRequirements(
+    completeDocumentText,
+  );
 
   const { data: merges, error: mergesError } = await supabase
     .from("bid_analysis_merges")
@@ -947,6 +1244,11 @@ DETALHAMENTO OBRIGATÓRIO:
 - Liste cada declaração obrigatória individualmente.
 - Detalhe garantias, visita técnica, prazos, medição, pagamento, reajuste e penalidades.
 - O checklist deve conter um item para cada documento ou providência concreta.
+- Crie "mandatory_documents" para documentos cuja ausência possa causar inabilitação ou desclassificação.
+- Crie "mandatory_actions" para providências como visita técnica, vistoria, credenciamento, envio de amostra ou garantia.
+- Crie "disqualification_risks" sempre que o edital usar expressões como "sob pena de", "será inabilitado" ou "será desclassificado".
+- CNDT, FGTS, certidões federal, estadual e municipal devem ser tratados individualmente.
+- Visita técnica e atestado de vistoria devem ser classificados como obrigatórios quando a redação indicar dever ou consequência eliminatória.
       `.trim(),
       input: `
 DOCUMENTO: ${
@@ -958,6 +1260,48 @@ CONSOLIDAÇÕES DE TODO O EDITAL:
 ${JSON.stringify(merges)}
       `.trim(),
     });
+
+    finalAnalysis.fiscal_documents = uniqueStrings([
+      ...(finalAnalysis.fiscal_documents || []),
+      ...criticalAudit.forced_fiscal_documents,
+    ]);
+
+    finalAnalysis.site_visit = uniqueStrings([
+      ...(finalAnalysis.site_visit || []),
+      ...criticalAudit.forced_site_visit,
+    ]);
+
+    finalAnalysis.checklist = uniqueObjects(
+      [
+        ...(finalAnalysis.checklist || []),
+        ...criticalAudit.forced_checklist,
+      ],
+      (value: any) => `${value.category}-${value.item}`,
+    );
+
+    finalAnalysis.mandatory_documents = uniqueObjects(
+      [
+        ...(finalAnalysis.mandatory_documents || []),
+        ...criticalAudit.mandatory_documents,
+      ],
+      (value: any) => `${value.item}-${value.evidence}`,
+    );
+
+    finalAnalysis.mandatory_actions = uniqueObjects(
+      [
+        ...(finalAnalysis.mandatory_actions || []),
+        ...criticalAudit.mandatory_actions,
+      ],
+      (value: any) => `${value.item}-${value.evidence}`,
+    );
+
+    finalAnalysis.disqualification_risks = uniqueObjects(
+      [
+        ...(finalAnalysis.disqualification_risks || []),
+        ...criticalAudit.disqualification_risks,
+      ],
+      (value: any) => `${value.item}-${value.evidence}`,
+    );
 
     const riskLevel = finalAnalysis.risks?.some(
       (risk: any) => risk.level === "Alto",

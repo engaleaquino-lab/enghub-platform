@@ -574,6 +574,65 @@ export default function BidAnalyzerPage() {
                 </section>
               </div>
 
+              <section className="card knockout-section">
+                <div className="knockout-header">
+                  <div>
+                    <span className="eyebrow">CONFERÊNCIA OBRIGATÓRIA</span>
+                    <h3>Itens que podem eliminar a empresa</h3>
+                  </div>
+                  <strong>
+                    {(data.mandatory_documents?.length || 0) +
+                      (data.mandatory_actions?.length || 0) +
+                      (data.disqualification_risks?.length || 0)}
+                  </strong>
+                </div>
+
+                <div className="knockout-grid">
+                  <article>
+                    <h4>Documentos obrigatórios</h4>
+                    {(data.mandatory_documents || []).map((item: any, index: number) => (
+                      <div className="knockout-item" key={`mandatory-document-${index}`}>
+                        <strong>{item.item}</strong>
+                        <span>{item.consequence}</span>
+                        <small>{item.evidence}</small>
+                      </div>
+                    ))}
+                    {!data.mandatory_documents?.length && (
+                      <div className="empty compact">Nenhum documento eliminatório identificado automaticamente.</div>
+                    )}
+                  </article>
+
+                  <article>
+                    <h4>Providências obrigatórias</h4>
+                    {(data.mandatory_actions || []).map((item: any, index: number) => (
+                      <div className="knockout-item" key={`mandatory-action-${index}`}>
+                        <strong>{item.item}</strong>
+                        <span>{item.deadline}</span>
+                        <span>{item.consequence}</span>
+                        <small>{item.evidence}</small>
+                      </div>
+                    ))}
+                    {!data.mandatory_actions?.length && (
+                      <div className="empty compact">Nenhuma providência eliminatória identificada automaticamente.</div>
+                    )}
+                  </article>
+
+                  <article>
+                    <h4>Riscos de inabilitação/desclassificação</h4>
+                    {(data.disqualification_risks || []).map((item: any, index: number) => (
+                      <div className="knockout-item danger" key={`risk-elimination-${index}`}>
+                        <strong>{item.type}: {item.item}</strong>
+                        <span>{item.reason}</span>
+                        <small>{item.evidence}</small>
+                      </div>
+                    ))}
+                    {!data.disqualification_risks?.length && (
+                      <div className="empty compact">Nenhuma consequência eliminatória expressa identificada.</div>
+                    )}
+                  </article>
+                </div>
+              </section>
+
               <div className="professional-analysis-grid">
                 <section className="card">
                   <h3>Habilitação jurídica</h3>
