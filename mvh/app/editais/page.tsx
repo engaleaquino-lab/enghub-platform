@@ -182,210 +182,97 @@ export default function BidAnalyzerPage() {
       return;
     }
 
+    const moduleLabels = [
+      "Dados principais do edital",
+      "Credenciamento",
+      "Habilitação Jurídica",
+      "Habilitação Fiscal e Trabalhista",
+      "CREA, responsáveis técnicos e CAT",
+      "Atestados e exigências técnicas",
+      "Habilitação Econômico-Financeira",
+      "Declarações e Anexos",
+      "Proposta, BDI, CPU e encargos sociais",
+      "Garantias, vistoria, prazos e execução",
+      "Riscos, itens eliminatórios e checklist",
+    ];
+
     try {
       setLoading(true);
       setError("");
       setProgress(0);
-      setProgressLabel("Verificando análise anterior…");
+      setProgressLabel("Preparando análise rápida indexada…");
       setMessage(
-        "O sistema retomará o progresso e usará respostas compactas para evitar cortes.",
+        "O edital será lido uma vez. Cada auditor receberá somente os trechos relacionados ao seu tema.",
       );
 
-      const resumeResult = await requestAnalysis({
-        action: "resume",
+      const start = await requestAnalysis({
+        action: "fast_start",
         document_id: selectedDocument,
       });
 
-      let analysisId = "";
-      let totalBatches = 0;
-      let totalMerges = 0;
-      let completedBatches = 0;
-      let completedMerges = 0;
-      let batchStatuses: Array<{
-        batch_index: number;
-        status: string;
-      }> = [];
-      let mergeStatuses: Array<{
-        merge_index: number;
-        status: string;
-      }> = [];
-
-      if (resumeResult.resume) {
-        analysisId = String(resumeResult.resume.analysis_id || "");
-        totalBatches = Number(
-          resumeResult.resume.total_batches || 0,
-        );
-        totalMerges = Number(
-          resumeResult.resume.total_merges || 0,
-        );
-        completedBatches = Number(
-          resumeResult.resume.completed_batches || 0,
-        );
-        completedMerges = Number(
-          resumeResult.resume.completed_merges || 0,
-        );
-        batchStatuses = resumeResult.resume.batch_statuses || [];
-        mergeStatuses = resumeResult.resume.merge_statuses || [];
-
-        setMessage(
-          `Retomando análise anterior: ${completedBatches} lote(s) e ` +
-            `${completedMerges} consolidação(ões) já concluídos.`,
-        );
-      } else {
-        const start = await requestAnalysis({
-          action: "start",
-          document_id: selectedDocument,
-        });
-
-        analysisId = String(start.analysis_id || "");
-        totalBatches = Number(start.total_batches || 0);
-        totalMerges = Number(start.total_merges || 0);
-        batchStatuses = Array.from(
-          { length: totalBatches },
-          (_, batchIndex) => ({
-            batch_index: batchIndex,
-            status: "Pendente",
-          }),
-        );
-        mergeStatuses = Array.from(
-          { length: totalMerges },
-          (_, mergeIndex) => ({
-            merge_index: mergeIndex,
-            status: "Pendente",
-          }),
-        );
-
-        setMessage(
-          "Nova análise criada. Todos os trechos serão lidos com respostas compactas.",
-        );
-      }
-
-      if (
-        !analysisId ||
-        totalBatches < 1 ||
-        totalMerges < 1
-      ) {
-        throw new Error(
-          "Não foi possível preparar ou retomar a análise.",
-        );
-      }
-
-      const totalFinalSections = 11;
-      const totalSteps = totalBatches + totalMerges + totalFinalSections + 1;
-      let completedSteps = completedBatches + completedMerges;
-
-      setProgress(
-        Math.round((completedSteps / totalSteps) * 100),
+      const analysisId = String(start.analysis_id || "");
+      const totalSections = Number(
+        start.total_sections || moduleLabels.length,
       );
 
-      for (
-        let batchIndex = 0;
-        batchIndex < totalBatches;
-        batchIndex += 1
-      ) {
-        const existing = batchStatuses.find(
-          (item) => item.batch_index === batchIndex,
-        );
-
-        if (existing?.status === "Concluído") {
-          continue;
-        }
-
-        setProgressLabel(
-          `Lendo o edital: lote ${batchIndex + 1} de ${totalBatches}…`,
-        );
-
-        await requestStep(
-          {
-            action: "process_batch",
-            analysis_id: analysisId,
-            batch_index: batchIndex,
-          },
-          `Lote ${batchIndex + 1}`,
-        );
-
-        completedSteps += 1;
-        setProgress(
-          Math.round((completedSteps / totalSteps) * 100),
+      if (!analysisId || totalSections < 1) {
+        throw new Error(
+          "Não foi possível iniciar a análise rápida.",
         );
       }
 
-      for (
-        let mergeIndex = 0;
-        mergeIndex < totalMerges;
-        mergeIndex += 1
-      ) {
-        const existing = mergeStatuses.find(
-          (item) => item.merge_index === mergeIndex,
-        );
+      let completed = 0;
+      const concurrency = 3;
 
-        if (existing?.status === "Concluído") {
-          continue;
-        }
+      for (
+        let offset = 0;
+        offset < totalSections;
+        offset += concurrency
+      ) {
+        const indexes = Array.from(
+          {
+            length: Math.min(
+              concurrency,
+              totalSections - offset,
+            ),
+          },
+          (_, index) => offset + index,
+        );
 
         setProgressLabel(
-          `Organizando resultados: grupo ${mergeIndex + 1} de ${totalMerges}…`,
+          `Auditando em paralelo: ${indexes
+            .map((index) => moduleLabels[index])
+            .join(" • ")}…`,
         );
 
-        await requestStep(
-          {
-            action: "process_merge",
-            analysis_id: analysisId,
-            merge_index: mergeIndex,
-          },
-          `Consolidação ${mergeIndex + 1}`,
+        await Promise.all(
+          indexes.map((sectionIndex) =>
+            requestStep(
+              {
+                action: "fast_process_section",
+                analysis_id: analysisId,
+                section_index: sectionIndex,
+              },
+              moduleLabels[sectionIndex],
+            ),
+          ),
         );
 
-        completedSteps += 1;
+        completed += indexes.length;
         setProgress(
-          Math.round((completedSteps / totalSteps) * 100),
+          Math.round(
+            (completed / (totalSections + 1)) * 100,
+          ),
         );
       }
 
-      const finalLabels = [
-        "Dados principais do edital",
-        "Credenciamento",
-        "Habilitação Jurídica",
-        "Habilitação Fiscal e Trabalhista",
-        "CREA, responsáveis técnicos e CAT",
-        "Atestados e demais exigências técnicas",
-        "Habilitação Econômico-Financeira",
-        "Declarações e Anexos",
-        "Proposta, BDI, CPU e encargos sociais",
-        "Garantias, visita, prazos, execução e pagamento",
-        "Riscos, itens eliminatórios e checklist final",
-      ];
-
-      for (
-        let sectionIndex = 0;
-        sectionIndex < totalFinalSections;
-        sectionIndex += 1
-      ) {
-        setProgressLabel(
-          `Auditoria final ${sectionIndex + 1} de ${totalFinalSections}: ` +
-            `${finalLabels[sectionIndex]}…`,
-        );
-
-        await requestStep(
-          {
-            action: "process_final_section",
-            analysis_id: analysisId,
-            section_index: sectionIndex,
-          },
-          `Seção final ${sectionIndex + 1}`,
-        );
-
-        completedSteps += 1;
-        setProgress(
-          Math.round((completedSteps / totalSteps) * 100),
-        );
-      }
-
-      setProgressLabel("Juntando os onze módulos auditados…");
+      setProgressLabel(
+        "Juntando o banco de conhecimento do edital…",
+      );
 
       const result = await requestStep(
         {
-          action: "finalize",
+          action: "fast_finalize",
           analysis_id: analysisId,
         },
         "Finalização",
@@ -393,17 +280,16 @@ export default function BidAnalyzerPage() {
 
       setProgress(100);
       setSelectedAnalysis(result.analysis);
-      setProgressLabel("Análise integral concluída.");
+      setProgressLabel("Análise rápida concluída.");
       setMessage(
-        `Análise concluída com ${totalBatches} lote(s) e ` +
-          `${totalMerges} consolidação(ões).`,
+        `Análise concluída com ${totalSections} auditores especializados processados em paralelo.`,
       );
 
       await load();
     } catch (cause: any) {
       setError(cause.message);
       setMessage(
-        "As etapas já concluídas foram preservadas. A mensagem acima informa exatamente qual lote ou módulo falhou. Clique novamente para continuar.",
+        "Os módulos concluídos foram preservados. Tente novamente para repetir apenas o que falhou.",
       );
       setProgressLabel("");
     } finally {
@@ -497,7 +383,7 @@ export default function BidAnalyzerPage() {
         </div>
 
         <button className="btn" disabled={loading || !selectedDocument} onClick={analyze}>
-          {loading ? "Analisando edital inteiro…" : "Analisar edital"}
+          {loading ? "Análise rápida em andamento…" : "Analisar edital"}
         </button>
       </section>
 

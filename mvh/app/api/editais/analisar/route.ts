@@ -16,7 +16,10 @@ type Action =
   | "process_batch"
   | "process_merge"
   | "process_final_section"
-  | "finalize";
+  | "finalize"
+  | "fast_start"
+  | "fast_process_section"
+  | "fast_finalize";
 
 type RequestBody = {
   action?: Action;
@@ -2118,6 +2121,782 @@ ${JSON.stringify(source.literalAudit)}
   }
 }
 
+
+const FAST_SECTION_KEYWORDS: string[][] = [
+  [
+    "edital",
+    "processo",
+    "concorrencia",
+    "pregao",
+    "modalidade",
+    "eletronica",
+    "presencial",
+    "plataforma",
+    "compras.gov",
+    "bll",
+    "licitanet",
+    "regime de execucao",
+    "criterio de julgamento",
+    "objeto",
+    "sessao",
+  ],
+  [
+    "credenciamento",
+    "representante",
+    "procuracao",
+    "documento com foto",
+    "cadastro na plataforma",
+    "assinatura digital",
+  ],
+  [
+    "habilitacao juridica",
+    "cnpj",
+    "contrato social",
+    "estatuto social",
+    "registro comercial",
+    "ata de eleicao",
+    "alteracao contratual",
+  ],
+  [
+    "regularidade fiscal",
+    "regularidade trabalhista",
+    "receita federal",
+    "pgfn",
+    "divida ativa",
+    "fazenda estadual",
+    "fazenda municipal",
+    "fgts",
+    "cndt",
+    "debitos trabalhistas",
+    "inscricao estadual",
+    "inscricao municipal",
+  ],
+  [
+    "crea",
+    "conselho regional",
+    "responsavel tecnico",
+    "cat",
+    "certidao de acervo tecnico",
+    "vinculo profissional",
+    "quadro permanente",
+  ],
+  [
+    "atestado",
+    "capacidade tecnica",
+    "qualificacao tecnica",
+    "parcela de maior relevancia",
+    "quantitativo minimo",
+    "somatorio",
+    "estrutura metalica",
+    "cobertura metalica",
+    "telha metalica",
+    "concreto",
+    "tubulacao",
+    "m²",
+    "m2",
+    "m³",
+    "m3",
+    "kg",
+  ],
+  [
+    "balanco patrimonial",
+    "dre",
+    "liquidez geral",
+    "liquidez corrente",
+    "solvencia geral",
+    "capital social",
+    "patrimonio liquido",
+    "falencia",
+    "recuperacao judicial",
+    "economico-financeira",
+  ],
+  [
+    "declaracao",
+    "anexo",
+    "fatos supervenientes",
+    "fatos impeditivos",
+    "menor",
+    "me epp",
+    "lgpd",
+    "modelo de declaracao",
+  ],
+  [
+    "proposta",
+    "planilha orcamentaria",
+    "cronograma fisico-financeiro",
+    "bdi",
+    "composicao de custos",
+    "composicao unitaria",
+    "cpu",
+    "encargos sociais",
+    "desonerado",
+    "nao desonerado",
+    "curva abc",
+    "memorial de calculo",
+    "validade da proposta",
+  ],
+  [
+    "garantia",
+    "visita tecnica",
+    "vistoria",
+    "declaracao de nao vistoria",
+    "prazo",
+    "execucao",
+    "medicao",
+    "pagamento",
+    "reajuste",
+    "multa",
+    "penalidade",
+    "recurso",
+    "impugnacao",
+    "esclarecimento",
+  ],
+  [
+    "sob pena",
+    "inabilitacao",
+    "desclassificacao",
+    "impedimento",
+    "risco",
+    "restritiva",
+    "obrigatorio",
+    "devera apresentar",
+    "nao apresentacao",
+  ],
+];
+
+function scoreChunkForSection(
+  content: string,
+  keywords: string[],
+) {
+  const normalized = normalizeSearchText(content).toLowerCase();
+  let score = 0;
+
+  for (const keyword of keywords) {
+    const normalizedKeyword = normalizeSearchText(keyword).toLowerCase();
+    let index = normalized.indexOf(normalizedKeyword);
+
+    while (index >= 0) {
+      score += normalizedKeyword.length >= 12 ? 5 : 3;
+      index = normalized.indexOf(
+        normalizedKeyword,
+        index + normalizedKeyword.length,
+      );
+    }
+  }
+
+  if (
+    /\b\d+([.,]\d+)?\s*(kg|m2|m²|m3|m³|%|dias?|meses?|anos?)\b/i.test(
+      content,
+    )
+  ) {
+    score += 2;
+  }
+
+  return score;
+}
+
+function selectRelevantChunks(
+  chunks: Array<{ chunk_index: number; content: string }>,
+  sectionIndex: number,
+) {
+  const keywords = FAST_SECTION_KEYWORDS[sectionIndex] || [];
+  const scored = chunks
+    .map((chunk) => ({
+      ...chunk,
+      score: scoreChunkForSection(chunk.content, keywords),
+    }))
+    .sort((a, b) => b.score - a.score || a.chunk_index - b.chunk_index);
+
+  const selected = new Map<number, { chunk_index: number; content: string }>();
+
+  const add = (chunk?: { chunk_index: number; content: string }) => {
+    if (chunk) selected.set(chunk.chunk_index, chunk);
+  };
+
+  // Contexto inicial do edital.
+  chunks.slice(0, sectionIndex === 0 ? 12 : 4).forEach(add);
+
+  // Anexos e declarações normalmente aparecem no fim.
+  if (sectionIndex === 7) {
+    chunks.slice(-20).forEach(add);
+  } else {
+    chunks.slice(-4).forEach(add);
+  }
+
+  const limit =
+    sectionIndex === 5 || sectionIndex === 7 || sectionIndex === 8
+      ? 30
+      : 22;
+
+  scored
+    .filter((chunk) => chunk.score > 0)
+    .slice(0, limit)
+    .forEach(add);
+
+  return Array.from(selected.values())
+    .sort((a, b) => a.chunk_index - b.chunk_index)
+    .slice(0, limit + 8);
+}
+
+async function fastStartAnalysis(
+  documentId: string,
+  context: ApiContext,
+) {
+  const { supabase, user, organizationId } = context;
+
+  const { data: document, error: documentError } = await supabase
+    .from("company_documents")
+    .select("id,name,category")
+    .eq("id", documentId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (documentError) throw documentError;
+  if (!document) throw new Error("Documento não encontrado.");
+
+  const { count, error: countError } = await supabase
+    .from("document_chunks")
+    .select("id", { count: "exact", head: true })
+    .eq("document_id", documentId)
+    .eq("organization_id", organizationId);
+
+  if (countError) throw countError;
+  if (!count) throw new Error("O edital não possui trechos indexados.");
+
+  const { data: analysis, error: analysisError } = await supabase
+    .from("bid_analyses")
+    .insert({
+      organization_id: organizationId,
+      document_id: documentId,
+      created_by: user.id,
+      status: "Análise rápida",
+      extracted_data: {},
+      error_message: null,
+      processing_started_at: new Date().toISOString(),
+      last_heartbeat_at: new Date().toISOString(),
+      total_steps: FINAL_SECTION_CONFIG.length + 1,
+      completed_steps: 0,
+      current_step: "Preparando módulos especializados",
+    })
+    .select("id")
+    .single();
+
+  if (analysisError) throw analysisError;
+
+  return {
+    analysis_id: analysis.id,
+    total_sections: FINAL_SECTION_CONFIG.length,
+    total_chunks: count,
+    document_name: document.name,
+  };
+}
+
+async function fastProcessSection(
+  analysisId: string,
+  sectionIndex: number,
+  apiKey: string,
+  context: ApiContext,
+) {
+  const { supabase, organizationId } = context;
+
+  if (
+    !Number.isInteger(sectionIndex) ||
+    sectionIndex < 0 ||
+    sectionIndex >= FINAL_SECTION_CONFIG.length
+  ) {
+    throw new Error("Módulo especializado inválido.");
+  }
+
+  const config = FINAL_SECTION_CONFIG[sectionIndex];
+  const analysis = await getAnalysis(analysisId, context);
+
+  const { data: existing, error: existingError } = await supabase
+    .from("bid_analysis_final_sections")
+    .select("*")
+    .eq("analysis_id", analysisId)
+    .eq("section_index", sectionIndex)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  if (
+    existing?.status === "Concluído" &&
+    existing.section_data &&
+    existing.section_name === `fast_${config.name}`
+  ) {
+    return {
+      section_index: sectionIndex,
+      status: "Concluído",
+      reused: true,
+    };
+  }
+
+  const { data: chunks, error: chunksError } = await supabase
+    .from("document_chunks")
+    .select("chunk_index,content")
+    .eq("document_id", analysis.document_id)
+    .eq("organization_id", organizationId)
+    .order("chunk_index", { ascending: true });
+
+  if (chunksError) throw chunksError;
+  if (!chunks?.length) throw new Error("Nenhum trecho indexado encontrado.");
+
+  const normalizedChunks = chunks.map((chunk) => ({
+    chunk_index: Number(chunk.chunk_index || 0),
+    content: String(chunk.content || ""),
+  }));
+
+  const relevant = selectRelevantChunks(
+    normalizedChunks,
+    sectionIndex,
+  );
+
+  const inputText = relevant
+    .map(
+      (chunk) =>
+        `[TRECHO ${chunk.chunk_index + 1}]\n${chunk.content}`,
+    )
+    .join("\n\n")
+    .slice(0, 58_000);
+
+  const rowPayload = {
+    organization_id: organizationId,
+    analysis_id: analysisId,
+    document_id: analysis.document_id,
+    section_index: sectionIndex,
+    section_name: `fast_${config.name}`,
+    status: "Processando",
+    error_message: null,
+    attempts: Number(existing?.attempts || 0) + 1,
+  };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("bid_analysis_final_sections")
+      .update(rowPayload)
+      .eq("id", existing.id);
+
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("bid_analysis_final_sections")
+      .insert(rowPayload);
+
+    if (error) throw error;
+  }
+
+  try {
+    const result = await callStructuredOpenAI({
+      apiKey,
+      schemaName: `fast_${config.name}`,
+      schema: config.schema,
+      maxOutputTokens: config.maxOutputTokens,
+      instructions: `
+Você é um auditor especializado em licitações de obras públicas.
+
+${config.instructions}
+
+O sistema selecionou automaticamente os trechos mais relacionados a este módulo.
+Faça uma auditoria completa somente da seção solicitada.
+
+REGRAS:
+- Não invente dados.
+- Preserve quantidades, unidades, percentuais, datas e consequências.
+- Use "Trecho N" na referência.
+- Não use expressões genéricas quando o edital individualizar documentos.
+- Se a informação não estiver nos trechos recebidos, deixe o campo vazio.
+      `.trim(),
+      input: `
+DOCUMENTO: ${
+        (analysis as any).company_documents?.name || "Edital"
+      }
+
+TRECHOS INDEXADOS MAIS RELEVANTES PARA ESTE MÓDULO:
+
+${inputText}
+      `.trim(),
+    });
+
+    const { error: updateError } = await supabase
+      .from("bid_analysis_final_sections")
+      .update({
+        status: "Concluído",
+        section_data: result,
+        error_message: null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("analysis_id", analysisId)
+      .eq("section_index", sectionIndex)
+      .eq("organization_id", organizationId);
+
+    if (updateError) throw updateError;
+
+    await supabase
+      .from("bid_analyses")
+      .update({
+        status: "Análise rápida",
+        completed_steps: sectionIndex + 1,
+        current_step: `Módulo ${sectionIndex + 1} concluído`,
+        last_heartbeat_at: new Date().toISOString(),
+      })
+      .eq("id", analysisId);
+
+    return {
+      section_index: sectionIndex,
+      status: "Concluído",
+      selected_chunks: relevant.length,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Erro no módulo.";
+
+    await supabase
+      .from("bid_analysis_final_sections")
+      .update({
+        status: "Erro",
+        error_message: message,
+      })
+      .eq("analysis_id", analysisId)
+      .eq("section_index", sectionIndex)
+      .eq("organization_id", organizationId);
+
+    throw error;
+  }
+}
+
+async function fastFinalizeAnalysis(
+  analysisId: string,
+  context: ApiContext,
+) {
+  const { supabase, organizationId } = context;
+  const analysis = await getAnalysis(analysisId, context);
+
+  const { data: sections, error: sectionsError } = await supabase
+    .from("bid_analysis_final_sections")
+    .select("section_index,status,section_name,section_data")
+    .eq("analysis_id", analysisId)
+    .eq("organization_id", organizationId)
+    .order("section_index", { ascending: true });
+
+  if (sectionsError) throw sectionsError;
+
+  const currentSections = (sections || []).filter((section) =>
+    String(section.section_name || "").startsWith("fast_"),
+  );
+
+  if (currentSections.length !== FINAL_SECTION_CONFIG.length) {
+    throw new Error(
+      `Foram concluídos ${currentSections.length} de ` +
+        `${FINAL_SECTION_CONFIG.length} módulos rápidos.`,
+    );
+  }
+
+  const incomplete = currentSections.filter(
+    (section) => section.status !== "Concluído",
+  );
+
+  if (incomplete.length) {
+    throw new Error(
+      `Ainda existem ${incomplete.length} módulo(s) pendente(s).`,
+    );
+  }
+
+  const finalAnalysis = Object.assign(
+    {},
+    ...currentSections.map((section) => section.section_data || {}),
+  ) as any;
+
+  const { data: chunks, error: chunksError } = await supabase
+    .from("document_chunks")
+    .select("chunk_index,content")
+    .eq("document_id", analysis.document_id)
+    .eq("organization_id", organizationId)
+    .order("chunk_index", { ascending: true });
+
+  if (chunksError) throw chunksError;
+
+  const completeDocumentText = (chunks || [])
+    .map((chunk) => String(chunk.content || ""))
+    .join("\n\n");
+
+  const criticalAudit = auditCriticalRequirements(
+    completeDocumentText,
+  );
+
+  finalAnalysis.fiscal_labor_qualification =
+    finalAnalysis.fiscal_labor_qualification || [];
+  finalAnalysis.site_visit = finalAnalysis.site_visit || [];
+  finalAnalysis.checklist = finalAnalysis.checklist || [];
+  finalAnalysis.mandatory_documents =
+    finalAnalysis.mandatory_documents || [];
+  finalAnalysis.mandatory_actions =
+    finalAnalysis.mandatory_actions || [];
+  finalAnalysis.disqualification_risks =
+    finalAnalysis.disqualification_risks || [];
+
+  for (const forced of criticalAudit.forced_fiscal_documents) {
+    const exists = finalAnalysis.fiscal_labor_qualification.some(
+      (item: any) =>
+        JSON.stringify(item).toLowerCase().includes(
+          forced.toLowerCase(),
+        ),
+    );
+
+    if (!exists) {
+      finalAnalysis.fiscal_labor_qualification.push({
+        document: forced,
+        issuing_body_or_scope: "Justiça do Trabalho",
+        validity_or_condition: "Conferir validade no edital",
+        mandatory: "Sim, quando exigida",
+        source_reference: "Auditoria literal do texto completo",
+      });
+    }
+  }
+
+  finalAnalysis.checklist = uniqueObjects(
+    [
+      ...finalAnalysis.checklist,
+      ...criticalAudit.forced_checklist.map((item) => ({
+        ...item,
+        source_reference: "Auditoria literal do texto completo",
+      })),
+    ],
+    (value: any) => `${value.category}-${value.item}`,
+  );
+
+  finalAnalysis.mandatory_documents = uniqueObjects(
+    [
+      ...finalAnalysis.mandatory_documents,
+      ...criticalAudit.mandatory_documents,
+    ],
+    (value: any) => `${value.item}-${value.evidence}`,
+  );
+
+  finalAnalysis.mandatory_actions = uniqueObjects(
+    [
+      ...finalAnalysis.mandatory_actions,
+      ...criticalAudit.mandatory_actions,
+    ],
+    (value: any) => `${value.item}-${value.evidence}`,
+  );
+
+  finalAnalysis.disqualification_risks = uniqueObjects(
+    [
+      ...finalAnalysis.disqualification_risks,
+      ...criticalAudit.disqualification_risks,
+    ],
+    (value: any) => `${value.item}-${value.evidence}`,
+  );
+
+  const visitText = JSON.stringify(
+    finalAnalysis.site_visit || [],
+  ).toLowerCase();
+
+  const hasVisitRequirement =
+    /visita|vistoria|atestado de vistoria|comprovante de visita/.test(
+      visitText,
+    );
+
+  const hasAlternativeDeclaration =
+    /declaracao de nao vistoria|declaração de não vistoria|declaracao de conhecimento|declaração de conhecimento|declaracao substitutiva|declaração substitutiva/.test(
+      visitText,
+    );
+
+  finalAnalysis.visit_conclusion = !hasVisitRequirement
+    ? "Não foi localizada exigência de vistoria técnica."
+    : hasAlternativeDeclaration
+      ? "Será aceita declaração de não vistoria, conforme condição identificada no edital."
+      : "A vistoria técnica é obrigatória, pois o edital a exige e não foi localizada declaração substitutiva.";
+
+  const proposalCount =
+    finalAnalysis.proposal_requirements?.length || 0;
+
+  const technicalCount =
+    (finalAnalysis.crea_requirements?.length || 0) +
+    (finalAnalysis.cat_requirements?.length || 0) +
+    (finalAnalysis.technical_certificates?.length || 0) +
+    (finalAnalysis.other_technical_requirements?.length || 0);
+
+  const documentCount =
+    (finalAnalysis.credentialing?.length || 0) +
+    (finalAnalysis.legal_qualification?.length || 0) +
+    (finalAnalysis.fiscal_labor_qualification?.length || 0) +
+    (finalAnalysis.economic_financial_qualification?.length || 0) +
+    (finalAnalysis.declarations?.length || 0);
+
+  let complexityScore = 15;
+  complexityScore += Math.min(25, documentCount);
+  complexityScore += Math.min(25, technicalCount * 2);
+  complexityScore += Math.min(15, proposalCount * 2);
+  complexityScore += hasVisitRequirement ? 8 : 0;
+  complexityScore +=
+    (finalAnalysis.guarantees?.length || 0) ? 6 : 0;
+  complexityScore += Math.min(
+    6,
+    finalAnalysis.disqualification_risks?.length || 0,
+  );
+  complexityScore = Math.max(
+    0,
+    Math.min(100, complexityScore),
+  );
+
+  finalAnalysis.complexity = {
+    score: complexityScore,
+    level:
+      complexityScore >= 75
+        ? "Alta"
+        : complexityScore >= 45
+          ? "Média"
+          : "Baixa",
+    explanation:
+      "Calculado pela quantidade de documentos, exigências técnicas, itens da proposta, vistoria, garantias e riscos eliminatórios.",
+  };
+
+  const complianceRows: any[] = [];
+
+  const addCompliance = (
+    category: string,
+    item: string,
+    mandatory: string,
+    consequence: string,
+    reference: string,
+  ) => {
+    if (!item) return;
+
+    complianceRows.push({
+      category,
+      item,
+      mandatory,
+      status: "A conferir pela empresa",
+      consequence,
+      source_reference:
+        reference || "Referência não identificada",
+    });
+  };
+
+  for (const item of finalAnalysis.credentialing || []) {
+    addCompliance(
+      "Credenciamento",
+      item.requirement,
+      item.mandatory,
+      item.consequence,
+      item.source_reference,
+    );
+  }
+
+  for (const item of finalAnalysis.legal_qualification || []) {
+    addCompliance(
+      "Habilitação Jurídica",
+      item.document,
+      item.mandatory,
+      "Possível inabilitação",
+      item.source_reference,
+    );
+  }
+
+  for (
+    const item of
+    finalAnalysis.fiscal_labor_qualification || []
+  ) {
+    addCompliance(
+      "Fiscal e Trabalhista",
+      item.document,
+      item.mandatory,
+      "Possível inabilitação",
+      item.source_reference,
+    );
+  }
+
+  for (
+    const item of
+    finalAnalysis.technical_certificates || []
+  ) {
+    addCompliance(
+      "Habilitação Técnica",
+      `${item.service} — ${item.minimum_quantity || ""} ${
+        item.unit || ""
+      }`.trim(),
+      "Sim, quando exigido",
+      "Possível inabilitação",
+      item.source_reference,
+    );
+  }
+
+  for (const item of finalAnalysis.declarations || []) {
+    addCompliance(
+      "Declarações",
+      `${item.annex || ""} — ${item.name}`.trim(),
+      item.mandatory,
+      item.consequence,
+      item.source_reference,
+    );
+  }
+
+  for (
+    const item of
+    finalAnalysis.proposal_requirements || []
+  ) {
+    addCompliance(
+      "Proposta",
+      item.item,
+      item.required,
+      item.consequence,
+      item.source_reference,
+    );
+  }
+
+  for (const item of finalAnalysis.mandatory_actions || []) {
+    addCompliance(
+      "Providências",
+      item.item,
+      "Sim",
+      item.consequence,
+      item.evidence,
+    );
+  }
+
+  finalAnalysis.compliance_matrix = uniqueObjects(
+    complianceRows,
+    (value: any) => `${value.category}-${value.item}`,
+  );
+
+  const riskLevel = finalAnalysis.risks?.some(
+    (risk: any) => risk.level === "Alto",
+  )
+    ? "Alto"
+    : finalAnalysis.risks?.some(
+          (risk: any) => risk.level === "Médio",
+        )
+      ? "Médio"
+      : "Baixo";
+
+  const { data: saved, error: saveError } = await supabase
+    .from("bid_analyses")
+    .update({
+      status: "Concluído",
+      executive_summary:
+        finalAnalysis.executive_summary || "",
+      extracted_data: finalAnalysis,
+      recommendation:
+        finalAnalysis.participation_recommendation ||
+        "Analisar com cautela",
+      risk_level: riskLevel,
+      error_message: null,
+      completed_steps: FINAL_SECTION_CONFIG.length + 1,
+      current_step: "Análise concluída",
+      last_heartbeat_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", analysisId)
+    .select("*,company_documents(name,category)")
+    .single();
+
+  if (saveError) throw saveError;
+
+  return saved;
+}
+
 async function finalizeAnalysis(
   analysisId: string,
   context: ApiContext,
@@ -2351,6 +3130,61 @@ export async function POST(request: NextRequest) {
         },
         500,
       );
+    }
+
+    if (action === "fast_start") {
+      const documentId = String(body.document_id || "");
+
+      if (!documentId) {
+        return json({ error: "Selecione um edital." }, 400);
+      }
+
+      return json(
+        await fastStartAnalysis(documentId, context),
+      );
+    }
+
+    if (action === "fast_process_section") {
+      const analysisId = String(body.analysis_id || "");
+      const sectionIndex = Number(body.section_index);
+
+      if (!analysisId) {
+        return json({ error: "Análise não informada." }, 400);
+      }
+
+      if (
+        !Number.isInteger(sectionIndex) ||
+        sectionIndex < 0
+      ) {
+        return json(
+          { error: "Índice do módulo inválido." },
+          400,
+        );
+      }
+
+      return json(
+        await fastProcessSection(
+          analysisId,
+          sectionIndex,
+          apiKey,
+          context,
+        ),
+      );
+    }
+
+    if (action === "fast_finalize") {
+      const analysisId = String(body.analysis_id || "");
+
+      if (!analysisId) {
+        return json({ error: "Análise não informada." }, 400);
+      }
+
+      return json({
+        analysis: await fastFinalizeAnalysis(
+          analysisId,
+          context,
+        ),
+      });
     }
 
     if (action === "resume") {
