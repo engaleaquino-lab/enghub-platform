@@ -37,17 +37,32 @@ function json(data: unknown, status = 200) {
   return Response.json(data, { status });
 }
 
-function outputText(payload: any) {
+function extractResponseContent(payload: any) {
+  if (payload?.output_parsed && typeof payload.output_parsed === "object") {
+    return payload.output_parsed;
+  }
+
   if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
   }
 
-  return (payload?.output || [])
-    .flatMap((item: any) => item?.content || [])
-    .filter((item: any) => item?.type === "output_text" && item?.text)
-    .map((item: any) => item.text)
-    .join("\n")
-    .trim();
+  for (const item of payload?.output || []) {
+    for (const content of item?.content || []) {
+      if (content?.json && typeof content.json === "object") {
+        return content.json;
+      }
+
+      if (content?.parsed && typeof content.parsed === "object") {
+        return content.parsed;
+      }
+
+      if (typeof content?.text === "string" && content.text.trim()) {
+        return content.text.trim();
+      }
+    }
+  }
+
+  return "";
 }
 
 function extractJson(text: string) {
@@ -346,17 +361,40 @@ ${fullText}
     let analysis: AnalysisPayload;
 
     try {
-      analysis = normalizeAnalysis(extractJson(outputText(payload)));
+      const responseContent = extractResponseContent(payload);
+
+      const parsed =
+        typeof responseContent === "object" && responseContent !== null
+          ? responseContent
+          : extractJson(String(responseContent || ""));
+
+      analysis = normalizeAnalysis(parsed);
     } catch (error) {
+      console.error("Resposta bruta da OpenAI:", payload);
+
       const message =
-        error instanceof Error ? error.message : "Falha ao interpretar a análise.";
+        error instanceof Error
+          ? error.message
+          : "Falha ao interpretar a análise.";
 
       await supabase
         .from("bid_analyses")
-        .update({ status: "Erro", error_message: message })
+        .update({
+          status: "Erro",
+          error_message: message,
+        })
         .eq("id", analysisId);
 
-      return json({ error: message }, 502);
+      return json(
+        {
+          error: message,
+          details:
+            process.env.NODE_ENV === "development"
+              ? payload
+              : undefined,
+        },
+        502,
+      );
     }
 
     const { data: saved, error: saveError } = await supabase
