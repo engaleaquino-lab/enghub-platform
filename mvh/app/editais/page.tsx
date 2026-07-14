@@ -52,6 +52,8 @@ export default function BidAnalyzerPage() {
   const [creatingBid, setCreatingBid] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
 
   async function load() {
     try {
@@ -102,6 +104,29 @@ export default function BidAnalyzerPage() {
     };
   }, [data]);
 
+  async function requestAnalysis(payload: Record<string, unknown>) {
+    const response = await fetch("/api/editais/analisar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const raw = await response.text();
+    let data: any = {};
+
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      throw new Error(raw || "A API devolveu uma resposta inválida.");
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || "Falha na análise.");
+    }
+
+    return data;
+  }
+
   async function analyze() {
     if (!selectedDocument) {
       setError("Selecione um edital da Biblioteca Inteligente.");
@@ -111,23 +136,55 @@ export default function BidAnalyzerPage() {
     try {
       setLoading(true);
       setError("");
-      setMessage("Lendo o edital e estruturando requisitos, prazos e riscos…");
+      setProgress(0);
+      setProgressLabel("Preparando a análise integral…");
+      setMessage("O edital inteiro será analisado em lotes, sem descartar trechos.");
 
-      const response = await fetch("/api/editais/analisar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document_id: selectedDocument }),
+      const start = await requestAnalysis({
+        action: "start",
+        document_id: selectedDocument,
       });
 
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Falha na análise.");
+      const analysisId = String(start.analysis_id);
+      const totalBatches = Number(start.total_batches || 0);
 
-      setSelectedAnalysis(payload.analysis);
-      setMessage("Análise concluída e salva.");
+      if (!analysisId || totalBatches < 1) {
+        throw new Error("Não foi possível preparar os lotes do edital.");
+      }
+
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
+        setProgressLabel(
+          `Analisando lote ${batchIndex + 1} de ${totalBatches}…`,
+        );
+        setProgress(Math.round((batchIndex / (totalBatches + 1)) * 100));
+
+        await requestAnalysis({
+          action: "process_batch",
+          analysis_id: analysisId,
+          batch_index: batchIndex,
+        });
+      }
+
+      setProgressLabel("Consolidando todos os lotes…");
+      setProgress(Math.round((totalBatches / (totalBatches + 1)) * 100));
+
+      const result = await requestAnalysis({
+        action: "consolidate",
+        analysis_id: analysisId,
+      });
+
+      setSelectedAnalysis(result.analysis);
+      setProgress(100);
+      setProgressLabel("Análise integral concluída.");
+      setMessage(
+        `Análise concluída: ${start.total_chunks} trecho(s) lido(s) em ${totalBatches} lote(s).`,
+      );
+
       await load();
     } catch (cause: any) {
       setError(cause.message);
       setMessage("");
+      setProgressLabel("");
     } finally {
       setLoading(false);
     }
@@ -180,6 +237,24 @@ export default function BidAnalyzerPage() {
       {error && <div className="warning">{error}</div>}
       {message && <div className="note">{message}</div>}
 
+      {loading && (
+        <section className="card batch-progress">
+          <div className="batch-progress-header">
+            <strong>{progressLabel}</strong>
+            <span>{progress}%</span>
+          </div>
+          <div className="batch-progress-track">
+            <div
+              className="batch-progress-bar"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <small>
+            Todos os trechos serão processados. Não feche esta página durante a análise.
+          </small>
+        </section>
+      )}
+
       <section className="card bid-analyzer-control">
         <div className="field">
           <label>Edital disponível na Biblioteca</label>
@@ -201,7 +276,7 @@ export default function BidAnalyzerPage() {
         </div>
 
         <button className="btn" disabled={loading || !selectedDocument} onClick={analyze}>
-          {loading ? "Analisando edital…" : "Analisar edital"}
+          {loading ? "Analisando edital inteiro…" : "Analisar edital"}
         </button>
       </section>
 

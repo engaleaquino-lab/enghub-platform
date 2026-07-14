@@ -5,10 +5,90 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const CHUNKS_PER_BATCH = 8;
+const MAX_BATCH_CHARS = 14_000;
 const OPENAI_TIMEOUT_MS = 50_000;
-const MAX_EDITAL_CHARS = 48_000;
 
-const analysisJsonSchema = {
+type Action = "start" | "process_batch" | "consolidate";
+
+type RequestBody = {
+  action?: Action;
+  document_id?: string;
+  analysis_id?: string;
+  batch_index?: number;
+};
+
+function json(data: unknown, status = 200) {
+  return Response.json(data, { status });
+}
+
+const partialSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    facts: { type: "array", items: { type: "string" } },
+    objects: { type: "array", items: { type: "string" } },
+    agencies: { type: "array", items: { type: "string" } },
+    notice_numbers: { type: "array", items: { type: "string" } },
+    modalities: { type: "array", items: { type: "string" } },
+    dates: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          date: { anyOf: [{ type: "string" }, { type: "null" }] },
+          detail: { type: "string" },
+        },
+        required: ["item", "date", "detail"],
+      },
+    },
+    values: { type: "array", items: { type: "string" } },
+    required_documents: { type: "array", items: { type: "string" } },
+    technical_requirements: { type: "array", items: { type: "string" } },
+    financial_requirements: { type: "array", items: { type: "string" } },
+    guarantees: { type: "array", items: { type: "string" } },
+    execution_conditions: { type: "array", items: { type: "string" } },
+    payment_conditions: { type: "array", items: { type: "string" } },
+    risks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          level: { type: "string", enum: ["Baixo", "Médio", "Alto"] },
+          item: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["level", "item", "reason"],
+      },
+    },
+    restrictive_clauses: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          item: { type: "string" },
+          explanation: { type: "string" },
+        },
+        required: ["item", "explanation"],
+      },
+    },
+    attention_points: { type: "array", items: { type: "string" } },
+    clarification_questions: { type: "array", items: { type: "string" } },
+  },
+  required: [
+    "facts", "objects", "agencies", "notice_numbers", "modalities", "dates",
+    "values", "required_documents", "technical_requirements",
+    "financial_requirements", "guarantees", "execution_conditions",
+    "payment_conditions", "risks", "restrictive_clauses", "attention_points",
+    "clarification_questions"
+  ],
+} as const;
+
+const finalSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
@@ -17,12 +97,8 @@ const analysisJsonSchema = {
     agency: { type: "string" },
     notice_number: { type: "string" },
     modality: { type: "string" },
-    session_date: {
-      anyOf: [{ type: "string" }, { type: "null" }],
-    },
-    estimated_value: {
-      anyOf: [{ type: "number" }, { type: "null" }],
-    },
+    session_date: { anyOf: [{ type: "string" }, { type: "null" }] },
+    estimated_value: { anyOf: [{ type: "number" }, { type: "null" }] },
     execution_deadline: { type: "string" },
     proposal_validity: { type: "string" },
     judgment_criterion: { type: "string" },
@@ -31,22 +107,10 @@ const analysisJsonSchema = {
       enum: ["Participar", "Analisar com cautela", "Não participar"],
     },
     recommendation_reason: { type: "string" },
-    required_documents: {
-      type: "array",
-      items: { type: "string" },
-    },
-    technical_requirements: {
-      type: "array",
-      items: { type: "string" },
-    },
-    financial_requirements: {
-      type: "array",
-      items: { type: "string" },
-    },
-    guarantees: {
-      type: "array",
-      items: { type: "string" },
-    },
+    required_documents: { type: "array", items: { type: "string" } },
+    technical_requirements: { type: "array", items: { type: "string" } },
+    financial_requirements: { type: "array", items: { type: "string" } },
+    guarantees: { type: "array", items: { type: "string" } },
     deadlines: {
       type: "array",
       items: {
@@ -54,9 +118,7 @@ const analysisJsonSchema = {
         additionalProperties: false,
         properties: {
           item: { type: "string" },
-          date: {
-            anyOf: [{ type: "string" }, { type: "null" }],
-          },
+          date: { anyOf: [{ type: "string" }, { type: "null" }] },
           detail: { type: "string" },
         },
         required: ["item", "date", "detail"],
@@ -68,10 +130,7 @@ const analysisJsonSchema = {
         type: "object",
         additionalProperties: false,
         properties: {
-          level: {
-            type: "string",
-            enum: ["Baixo", "Médio", "Alto"],
-          },
+          level: { type: "string", enum: ["Baixo", "Médio", "Alto"] },
           item: { type: "string" },
           reason: { type: "string" },
         },
@@ -98,429 +157,400 @@ const analysisJsonSchema = {
         properties: {
           item: { type: "string" },
           category: { type: "string" },
-          priority: {
-            type: "string",
-            enum: ["Baixa", "Média", "Alta"],
-          },
+          priority: { type: "string", enum: ["Baixa", "Média", "Alta"] },
         },
         required: ["item", "category", "priority"],
       },
     },
-    clarification_questions: {
-      type: "array",
-      items: { type: "string" },
-    },
-    attention_points: {
-      type: "array",
-      items: { type: "string" },
-    },
+    clarification_questions: { type: "array", items: { type: "string" } },
+    attention_points: { type: "array", items: { type: "string" } },
   },
   required: [
-    "executive_summary",
-    "object",
-    "agency",
-    "notice_number",
-    "modality",
-    "session_date",
-    "estimated_value",
-    "execution_deadline",
-    "proposal_validity",
-    "judgment_criterion",
-    "participation_recommendation",
-    "recommendation_reason",
-    "required_documents",
-    "technical_requirements",
-    "financial_requirements",
-    "guarantees",
-    "deadlines",
-    "risks",
-    "restrictive_clauses",
-    "checklist",
-    "clarification_questions",
-    "attention_points",
+    "executive_summary", "object", "agency", "notice_number", "modality",
+    "session_date", "estimated_value", "execution_deadline",
+    "proposal_validity", "judgment_criterion", "participation_recommendation",
+    "recommendation_reason", "required_documents", "technical_requirements",
+    "financial_requirements", "guarantees", "deadlines", "risks",
+    "restrictive_clauses", "checklist", "clarification_questions",
+    "attention_points"
   ],
 } as const;
 
-
-type AnalysisPayload = {
-  executive_summary: string;
-  object: string;
-  agency: string;
-  notice_number: string;
-  modality: string;
-  session_date: string | null;
-  estimated_value: number | null;
-  execution_deadline: string;
-  proposal_validity: string;
-  judgment_criterion: string;
-  participation_recommendation: "Participar" | "Analisar com cautela" | "Não participar";
-  recommendation_reason: string;
-  required_documents: string[];
-  technical_requirements: string[];
-  financial_requirements: string[];
-  guarantees: string[];
-  deadlines: Array<{ item: string; date: string | null; detail: string }>;
-  risks: Array<{ level: "Baixo" | "Médio" | "Alto"; item: string; reason: string }>;
-  restrictive_clauses: Array<{ item: string; explanation: string }>;
-  checklist: Array<{ item: string; category: string; priority: "Baixa" | "Média" | "Alta" }>;
-  clarification_questions: string[];
-  attention_points: string[];
-};
-
-function json(data: unknown, status = 200) {
-  return Response.json(data, { status });
-}
-
-function extractResponseContent(payload: any) {
-  if (payload?.output_parsed && typeof payload.output_parsed === "object") {
-    return payload.output_parsed;
-  }
-
+function extractResponseText(payload: any) {
   if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
   }
 
-  for (const item of payload?.output || []) {
-    for (const content of item?.content || []) {
-      if (content?.json && typeof content.json === "object") {
-        return content.json;
-      }
-
-      if (content?.parsed && typeof content.parsed === "object") {
-        return content.parsed;
-      }
-
-      if (typeof content?.text === "string" && content.text.trim()) {
-        return content.text.trim();
-      }
-    }
-  }
-
-  return "";
-}
-
-function extractJson(text: string) {
-  const cleaned = text
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
+  return (payload?.output || [])
+    .flatMap((item: any) => item?.content || [])
+    .filter((content: any) => typeof content?.text === "string")
+    .map((content: any) => content.text)
+    .join("\n")
     .trim();
-
-  const first = cleaned.indexOf("{");
-  const last = cleaned.lastIndexOf("}");
-
-  if (first < 0 || last <= first) {
-    throw new Error("A resposta estruturada da IA veio vazia ou incompleta.");
-  }
-
-  return JSON.parse(cleaned.slice(first, last + 1));
 }
 
-function normalizeAnalysis(value: any): AnalysisPayload {
-  const stringArray = (input: unknown) =>
-    Array.isArray(input)
-      ? input.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 80)
-      : [];
+async function callOpenAI(args: {
+  apiKey: string;
+  instructions: string;
+  input: string;
+  schemaName: string;
+  schema: unknown;
+  maxOutputTokens: number;
+}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
-  const rows = <T extends Record<string, unknown>>(
-    input: unknown,
-    mapper: (row: any) => T,
-  ) => (Array.isArray(input) ? input.slice(0, 80).map(mapper) : []);
-
-  const recommendation = ["Participar", "Analisar com cautela", "Não participar"].includes(
-    value?.participation_recommendation,
-  )
-    ? value.participation_recommendation
-    : "Analisar com cautela";
-
-  return {
-    executive_summary: String(value?.executive_summary || "Resumo não identificado."),
-    object: String(value?.object || ""),
-    agency: String(value?.agency || ""),
-    notice_number: String(value?.notice_number || ""),
-    modality: String(value?.modality || ""),
-    session_date: value?.session_date ? String(value.session_date) : null,
-    estimated_value:
-      typeof value?.estimated_value === "number"
-        ? value.estimated_value
-        : Number(value?.estimated_value) || null,
-    execution_deadline: String(value?.execution_deadline || ""),
-    proposal_validity: String(value?.proposal_validity || ""),
-    judgment_criterion: String(value?.judgment_criterion || ""),
-    participation_recommendation: recommendation,
-    recommendation_reason: String(value?.recommendation_reason || ""),
-    required_documents: stringArray(value?.required_documents),
-    technical_requirements: stringArray(value?.technical_requirements),
-    financial_requirements: stringArray(value?.financial_requirements),
-    guarantees: stringArray(value?.guarantees),
-    deadlines: rows(value?.deadlines, (row) => ({
-      item: String(row?.item || ""),
-      date: row?.date ? String(row.date) : null,
-      detail: String(row?.detail || ""),
-    })).filter((row) => row.item),
-    risks: rows(value?.risks, (row) => ({
-      level: ["Baixo", "Médio", "Alto"].includes(row?.level) ? row.level : "Médio",
-      item: String(row?.item || ""),
-      reason: String(row?.reason || ""),
-    })).filter((row) => row.item),
-    restrictive_clauses: rows(value?.restrictive_clauses, (row) => ({
-      item: String(row?.item || ""),
-      explanation: String(row?.explanation || ""),
-    })).filter((row) => row.item),
-    checklist: rows(value?.checklist, (row) => ({
-      item: String(row?.item || ""),
-      category: String(row?.category || "Geral"),
-      priority: ["Baixa", "Média", "Alta"].includes(row?.priority)
-        ? row.priority
-        : "Média",
-    })).filter((row) => row.item),
-    clarification_questions: stringArray(value?.clarification_questions),
-    attention_points: stringArray(value?.attention_points),
-  };
-}
-
-export async function POST(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return json({ error: "Sessão inválida. Entre novamente." }, 401);
-    }
-
-    const body = await request.json();
-    const documentId = String(body.document_id || "");
-
-    if (!documentId) return json({ error: "Selecione um edital." }, 400);
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return json({ error: "OPENAI_API_KEY não configurada na Vercel." }, 500);
-    }
-
-    const { data: membership, error: membershipError } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .limit(1)
-      .single();
-
-    if (membershipError || !membership) {
-      return json({ error: "Usuário sem organização ativa." }, 403);
-    }
-
-    const organizationId = membership.organization_id;
-
-    const { data: document, error: documentError } = await supabase
-      .from("company_documents")
-      .select("id,name,category,summary,processing_status")
-      .eq("id", documentId)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-
-    if (documentError) return json({ error: documentError.message }, 500);
-    if (!document) return json({ error: "Documento não encontrado." }, 404);
-
-    const { data: chunks, error: chunksError } = await supabase
-      .from("document_chunks")
-      .select("chunk_index,content")
-      .eq("document_id", documentId)
-      .eq("organization_id", organizationId)
-      .order("chunk_index", { ascending: true })
-      .limit(220);
-
-    if (chunksError) return json({ error: chunksError.message }, 500);
-
-    const fullText = (chunks || [])
-      .map((chunk) => String(chunk.content || ""))
-      .join("\n\n")
-      .slice(0, MAX_EDITAL_CHARS);
-
-    if (fullText.length < 300) {
-      return json({
-        error:
-          "O edital não possui texto suficiente indexado. Reenvie o PDF pela Biblioteca Inteligente.",
-      }, 400);
-    }
-
-    const { data: previous } = await supabase
-      .from("bid_analyses")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .eq("document_id", documentId)
-      .eq("status", "Processando")
-      .maybeSingle();
-
-    let analysisId = previous?.id || null;
-
-    if (!analysisId) {
-      const { data: created, error: createError } = await supabase
-        .from("bid_analyses")
-        .insert({
-          organization_id: organizationId,
-          document_id: documentId,
-          created_by: user.id,
-          status: "Processando",
-        })
-        .select("id")
-        .single();
-
-      if (createError) return json({ error: createError.message }, 500);
-      analysisId = created.id;
-    }
-
-    const instructions = `
-Você é um analista sênior de licitações e obras públicas brasileiras.
-
-Analise o edital com rigor técnico e administrativo.
-
-REGRAS:
-- Não invente dados ausentes.
-- Quando uma informação não estiver identificada, use string vazia, lista vazia ou null conforme o campo.
-- Datas identificáveis devem usar YYYY-MM-DD.
-- Valores devem ser números, sem símbolo monetário.
-- A recomendação é preliminar e deve considerar exigências, riscos, prazo e clareza do edital.
-- Não declare cláusulas como ilegais. Classifique apenas como potencialmente restritivas e explique.
-- Seja objetivo e evite itens repetidos.
-- Limite cada lista aos itens realmente relevantes.
-`.trim();
-
-    const input = `
-Responda exclusivamente em JSON válido, sem markdown e sem qualquer texto fora do JSON.
-
-ARQUIVO: ${document.name}
-CATEGORIA: ${document.category || "Edital"}
-RESUMO EXISTENTE: ${document.summary || "Não disponível"}
-
-TEXTO DO EDITAL:
-${fullText}
-`.trim();
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
-
-    let openAIResponse: Response;
-
-    try {
-      openAIResponse = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || "gpt-5-mini",
-          instructions,
-          input,
-          max_output_tokens: 5000,
-          text: {
-            format: {
-              type: "json_schema",
-              name: "bid_analysis",
-              strict: true,
-              schema: analysisJsonSchema,
-            },
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${args.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-5-mini",
+        instructions: args.instructions,
+        input: args.input,
+        max_output_tokens: args.maxOutputTokens,
+        text: {
+          format: {
+            type: "json_schema",
+            name: args.schemaName,
+            strict: true,
+            schema: args.schema,
           },
-          store: false,
-        }),
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error && error.name === "AbortError"
-          ? "A análise ultrapassou o tempo disponível. Clique novamente em Analisar edital."
-          : error instanceof Error
-            ? error.message
-            : "Falha de conexão com a OpenAI.";
+        },
+        store: false,
+      }),
+    });
 
-      await supabase
-        .from("bid_analyses")
-        .update({
-          status: "Erro",
-          error_message: message,
-        })
-        .eq("id", analysisId);
-
-      return json({ error: message }, 504);
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const raw = await openAIResponse.text();
-    let payload: any;
+    const raw = await response.text();
+    let payload: any = {};
 
     try {
       payload = raw ? JSON.parse(raw) : {};
     } catch {
-      payload = { error: { message: raw || "Resposta inválida da OpenAI." } };
+      throw new Error(raw || "A OpenAI devolveu uma resposta inválida.");
     }
 
-    if (!openAIResponse.ok) {
-      const message =
+    if (!response.ok) {
+      throw new Error(
         payload?.error?.message ||
-        `OpenAI respondeu com status ${openAIResponse.status}.`;
-
-      await supabase
-        .from("bid_analyses")
-        .update({ status: "Erro", error_message: message })
-        .eq("id", analysisId);
-
-      return json({ error: message }, 502);
-    }
-
-    let analysis: AnalysisPayload;
-
-    try {
-      const responseContent = extractResponseContent(payload);
-
-      const parsed =
-        typeof responseContent === "object" && responseContent !== null
-          ? responseContent
-          : extractJson(String(responseContent || ""));
-
-      analysis = normalizeAnalysis(parsed);
-    } catch (error) {
-      console.error("Resposta bruta da OpenAI:", payload);
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao interpretar a análise.";
-
-      await supabase
-        .from("bid_analyses")
-        .update({
-          status: "Erro",
-          error_message: message,
-        })
-        .eq("id", analysisId);
-
-      return json(
-        {
-          error: message,
-          details:
-            process.env.NODE_ENV === "development"
-              ? payload
-              : undefined,
-        },
-        502,
+        `OpenAI respondeu com status ${response.status}.`,
       );
     }
+
+    const output = extractResponseText(payload);
+    if (!output) throw new Error("A IA respondeu sem conteúdo estruturado.");
+
+    return JSON.parse(output);
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Este lote ultrapassou o tempo disponível. Tente novamente.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getContext() {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error("Sessão inválida. Entre novamente.");
+  }
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .limit(1)
+    .single();
+
+  if (membershipError || !membership) {
+    throw new Error("Usuário sem organização ativa.");
+  }
+
+  return {
+    supabase,
+    user,
+    organizationId: membership.organization_id as string,
+  };
+}
+
+async function startAnalysis(
+  documentId: string,
+  context: Awaited<ReturnType<typeof getContext>>,
+) {
+  const { supabase, user, organizationId } = context;
+
+  const { data: document, error: documentError } = await supabase
+    .from("company_documents")
+    .select("id,name,category,processing_status")
+    .eq("id", documentId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (documentError) throw documentError;
+  if (!document) throw new Error("Documento não encontrado.");
+
+  const { count, error: countError } = await supabase
+    .from("document_chunks")
+    .select("id", { count: "exact", head: true })
+    .eq("document_id", documentId)
+    .eq("organization_id", organizationId);
+
+  if (countError) throw countError;
+  if (!count) throw new Error("O edital não possui trechos indexados.");
+
+  const totalBatches = Math.ceil(count / CHUNKS_PER_BATCH);
+
+  const { data: analysis, error: analysisError } = await supabase
+    .from("bid_analyses")
+    .insert({
+      organization_id: organizationId,
+      document_id: documentId,
+      created_by: user.id,
+      status: "Preparando",
+      extracted_data: {},
+      error_message: null,
+    })
+    .select("id")
+    .single();
+
+  if (analysisError) throw analysisError;
+
+  const batches = Array.from({ length: totalBatches }, (_, batchIndex) => ({
+    organization_id: organizationId,
+    analysis_id: analysis.id,
+    document_id: documentId,
+    batch_index: batchIndex,
+    chunk_start: batchIndex * CHUNKS_PER_BATCH,
+    chunk_end: Math.min((batchIndex + 1) * CHUNKS_PER_BATCH - 1, count - 1),
+    status: "Pendente",
+  }));
+
+  const { error: batchError } = await supabase
+    .from("bid_analysis_batches")
+    .insert(batches);
+
+  if (batchError) {
+    await supabase.from("bid_analyses").delete().eq("id", analysis.id);
+    throw batchError;
+  }
+
+  return {
+    analysis_id: analysis.id,
+    total_batches: totalBatches,
+    total_chunks: count,
+    document_name: document.name,
+  };
+}
+
+async function processBatch(
+  analysisId: string,
+  batchIndex: number,
+  apiKey: string,
+  context: Awaited<ReturnType<typeof getContext>>,
+) {
+  const { supabase, organizationId } = context;
+
+  const { data: analysis, error: analysisError } = await supabase
+    .from("bid_analyses")
+    .select("id,document_id,company_documents(name,category)")
+    .eq("id", analysisId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (analysisError) throw analysisError;
+  if (!analysis) throw new Error("Análise não encontrada.");
+
+  const { data: batch, error: batchError } = await supabase
+    .from("bid_analysis_batches")
+    .select("*")
+    .eq("analysis_id", analysisId)
+    .eq("batch_index", batchIndex)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (batchError) throw batchError;
+  if (!batch) throw new Error("Lote não encontrado.");
+
+  if (batch.status === "Concluído" && batch.partial_data) {
+    return { batch_index: batchIndex, status: "Concluído", reused: true };
+  }
+
+  await supabase
+    .from("bid_analysis_batches")
+    .update({ status: "Processando", error_message: null })
+    .eq("id", batch.id);
+
+  const { data: chunks, error: chunksError } = await supabase
+    .from("document_chunks")
+    .select("chunk_index,content")
+    .eq("document_id", analysis.document_id)
+    .eq("organization_id", organizationId)
+    .gte("chunk_index", batch.chunk_start)
+    .lte("chunk_index", batch.chunk_end)
+    .order("chunk_index", { ascending: true });
+
+  if (chunksError) throw chunksError;
+
+  const batchText = (chunks || [])
+    .map((chunk) => `[TRECHO ${chunk.chunk_index + 1}]\n${chunk.content}`)
+    .join("\n\n")
+    .slice(0, MAX_BATCH_CHARS);
+
+  if (batchText.length < 50) throw new Error("O lote não possui texto suficiente.");
+
+  try {
+    const partial = await callOpenAI({
+      apiKey,
+      schemaName: "bid_batch_analysis",
+      schema: partialSchema,
+      maxOutputTokens: 1800,
+      instructions: `
+Você analisa uma parte de um edital público brasileiro.
+Extraia somente informações presentes neste lote.
+Não conclua que algo inexiste apenas porque não aparece neste lote.
+Não invente dados. Não repita itens.
+Datas identificáveis devem usar YYYY-MM-DD.
+Registre exigências técnicas com quantitativos, parcelas relevantes e critérios.
+Registre todas as condições relevantes de habilitação, execução, pagamento e risco.
+      `.trim(),
+      input: `
+DOCUMENTO: ${(analysis as any).company_documents?.name || "Edital"}
+LOTE: ${batchIndex + 1}
+
+Analise integralmente todos os trechos abaixo:
+
+${batchText}
+      `.trim(),
+    });
+
+    const { error: updateError } = await supabase
+      .from("bid_analysis_batches")
+      .update({
+        status: "Concluído",
+        partial_data: partial,
+        error_message: null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", batch.id);
+
+    if (updateError) throw updateError;
+
+    await supabase
+      .from("bid_analyses")
+      .update({ status: `Analisando ${batchIndex + 1}` })
+      .eq("id", analysisId);
+
+    return { batch_index: batchIndex, status: "Concluído" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro no lote.";
+
+    await supabase
+      .from("bid_analysis_batches")
+      .update({ status: "Erro", error_message: message })
+      .eq("id", batch.id);
+
+    await supabase
+      .from("bid_analyses")
+      .update({ status: "Erro", error_message: `Lote ${batchIndex + 1}: ${message}` })
+      .eq("id", analysisId);
+
+    throw error;
+  }
+}
+
+async function consolidateAnalysis(
+  analysisId: string,
+  apiKey: string,
+  context: Awaited<ReturnType<typeof getContext>>,
+) {
+  const { supabase, organizationId } = context;
+
+  const { data: analysis, error: analysisError } = await supabase
+    .from("bid_analyses")
+    .select("id,document_id,company_documents(name,category)")
+    .eq("id", analysisId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (analysisError) throw analysisError;
+  if (!analysis) throw new Error("Análise não encontrada.");
+
+  const { data: batches, error: batchesError } = await supabase
+    .from("bid_analysis_batches")
+    .select("batch_index,status,partial_data")
+    .eq("analysis_id", analysisId)
+    .eq("organization_id", organizationId)
+    .order("batch_index", { ascending: true });
+
+  if (batchesError) throw batchesError;
+  if (!batches?.length) throw new Error("Nenhum lote foi processado.");
+
+  const incomplete = batches.filter((batch) => batch.status !== "Concluído");
+  if (incomplete.length) {
+    throw new Error(`Ainda existem ${incomplete.length} lote(s) não concluído(s).`);
+  }
+
+  await supabase
+    .from("bid_analyses")
+    .update({ status: "Consolidando", error_message: null })
+    .eq("id", analysisId);
+
+  const partials = batches.map((batch) => ({
+    batch: batch.batch_index + 1,
+    data: batch.partial_data,
+  }));
+
+  try {
+    const finalAnalysis = await callOpenAI({
+      apiKey,
+      schemaName: "complete_bid_analysis",
+      schema: finalSchema,
+      maxOutputTokens: 4000,
+      instructions: `
+Você é um analista sênior de licitações e obras públicas brasileiras.
+Consolide resultados parciais produzidos a partir de TODAS as partes do edital.
+Elimine duplicidades sem perder detalhes, quantitativos, prazos ou condições.
+Resolva divergências priorizando dados mais específicos e contextualizados.
+Não invente informações ausentes.
+Datas identificáveis devem usar YYYY-MM-DD.
+Valores devem ser números, sem símbolo monetário.
+Cláusulas devem ser chamadas apenas de potencialmente restritivas.
+A recomendação é preliminar e deve considerar riscos, prazo, habilitação e clareza.
+O checklist deve cobrir os documentos e providências necessários à participação.
+      `.trim(),
+      input: `
+DOCUMENTO: ${(analysis as any).company_documents?.name || "Edital"}
+
+Abaixo estão as análises de todos os lotes, na ordem do documento.
+Consolide tudo em uma única análise final:
+
+${JSON.stringify(partials)}
+      `.trim(),
+    });
+
+    const riskLevel = finalAnalysis.risks?.some((risk: any) => risk.level === "Alto")
+      ? "Alto"
+      : finalAnalysis.risks?.some((risk: any) => risk.level === "Médio")
+        ? "Médio"
+        : "Baixo";
 
     const { data: saved, error: saveError } = await supabase
       .from("bid_analyses")
       .update({
         status: "Concluído",
-        executive_summary: analysis.executive_summary,
-        extracted_data: analysis,
-        recommendation: analysis.participation_recommendation,
-        risk_level:
-          analysis.risks.some((risk) => risk.level === "Alto")
-            ? "Alto"
-            : analysis.risks.some((risk) => risk.level === "Médio")
-              ? "Médio"
-              : "Baixo",
+        executive_summary: finalAnalysis.executive_summary,
+        extracted_data: finalAnalysis,
+        recommendation: finalAnalysis.participation_recommendation,
+        risk_level: riskLevel,
         error_message: null,
         completed_at: new Date().toISOString(),
       })
@@ -528,9 +558,58 @@ ${fullText}
       .select("*,company_documents(name,category)")
       .single();
 
-    if (saveError) return json({ error: saveError.message }, 500);
+    if (saveError) throw saveError;
+    return saved;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro na consolidação.";
 
-    return json({ analysis: saved });
+    await supabase
+      .from("bid_analyses")
+      .update({ status: "Erro", error_message: `Consolidação: ${message}` })
+      .eq("id", analysisId);
+
+    throw error;
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as RequestBody;
+    const action = body.action || "start";
+    const context = await getContext();
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      return json({ error: "OPENAI_API_KEY não configurada na Vercel." }, 500);
+    }
+
+    if (action === "start") {
+      const documentId = String(body.document_id || "");
+      if (!documentId) return json({ error: "Selecione um edital." }, 400);
+
+      const result = await startAnalysis(documentId, context);
+      return json(result);
+    }
+
+    const analysisId = String(body.analysis_id || "");
+    if (!analysisId) return json({ error: "Análise não informada." }, 400);
+
+    if (action === "process_batch") {
+      const batchIndex = Number(body.batch_index);
+      if (!Number.isInteger(batchIndex) || batchIndex < 0) {
+        return json({ error: "Índice do lote inválido." }, 400);
+      }
+
+      const result = await processBatch(analysisId, batchIndex, apiKey, context);
+      return json(result);
+    }
+
+    if (action === "consolidate") {
+      const analysis = await consolidateAnalysis(analysisId, apiKey, context);
+      return json({ analysis });
+    }
+
+    return json({ error: "Ação inválida." }, 400);
   } catch (error) {
     console.error("/api/editais/analisar", error);
     return json(
