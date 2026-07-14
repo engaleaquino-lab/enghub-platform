@@ -138,46 +138,87 @@ export default function BidAnalyzerPage() {
       setError("");
       setProgress(0);
       setProgressLabel("Preparando a análise integral…");
-      setMessage("O edital inteiro será analisado em lotes, sem descartar trechos.");
+      setMessage(
+        "O edital inteiro será lido em lotes menores e consolidado em etapas.",
+      );
 
       const start = await requestAnalysis({
         action: "start",
         document_id: selectedDocument,
       });
 
-      const analysisId = String(start.analysis_id);
+      const analysisId = String(start.analysis_id || "");
       const totalBatches = Number(start.total_batches || 0);
+      const totalMerges = Number(start.total_merges || 0);
+      const totalSteps = totalBatches + totalMerges + 1;
+      let completedSteps = 0;
 
-      if (!analysisId || totalBatches < 1) {
-        throw new Error("Não foi possível preparar os lotes do edital.");
+      if (
+        !analysisId ||
+        totalBatches < 1 ||
+        totalMerges < 1
+      ) {
+        throw new Error(
+          "Não foi possível preparar a análise integral.",
+        );
       }
 
-      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
+      for (
+        let batchIndex = 0;
+        batchIndex < totalBatches;
+        batchIndex += 1
+      ) {
         setProgressLabel(
-          `Analisando lote ${batchIndex + 1} de ${totalBatches}…`,
+          `Lendo o edital: lote ${batchIndex + 1} de ${totalBatches}…`,
         );
-        setProgress(Math.round((batchIndex / (totalBatches + 1)) * 100));
 
         await requestAnalysis({
           action: "process_batch",
           analysis_id: analysisId,
           batch_index: batchIndex,
         });
+
+        completedSteps += 1;
+        setProgress(
+          Math.round((completedSteps / totalSteps) * 100),
+        );
       }
 
-      setProgressLabel("Consolidando todos os lotes…");
-      setProgress(Math.round((totalBatches / (totalBatches + 1)) * 100));
+      for (
+        let mergeIndex = 0;
+        mergeIndex < totalMerges;
+        mergeIndex += 1
+      ) {
+        setProgressLabel(
+          `Organizando resultados: grupo ${mergeIndex + 1} de ${totalMerges}…`,
+        );
+
+        await requestAnalysis({
+          action: "process_merge",
+          analysis_id: analysisId,
+          merge_index: mergeIndex,
+        });
+
+        completedSteps += 1;
+        setProgress(
+          Math.round((completedSteps / totalSteps) * 100),
+        );
+      }
+
+      setProgressLabel("Montando a análise final do edital…");
 
       const result = await requestAnalysis({
         action: "consolidate",
         analysis_id: analysisId,
       });
 
-      setSelectedAnalysis(result.analysis);
+      completedSteps += 1;
       setProgress(100);
+      setSelectedAnalysis(result.analysis);
       setProgressLabel("Análise integral concluída.");
       setMessage(
-        `Análise concluída: ${start.total_chunks} trecho(s) lido(s) em ${totalBatches} lote(s).`,
+        `Análise concluída: ${start.total_chunks} trecho(s), ` +
+          `${totalBatches} lote(s) e ${totalMerges} consolidação(ões).`,
       );
 
       await load();
