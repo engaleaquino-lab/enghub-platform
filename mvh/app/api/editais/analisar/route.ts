@@ -222,7 +222,8 @@ export async function POST(request: NextRequest) {
       analysisId = created.id;
     }
 
-    const instructions = `
+    const instructions =
+      Responda SOMENTE em JSON válido.`
 Você é um analista sênior de licitações e obras públicas brasileiras.
 Analise o edital fornecido com rigor técnico e administrativo.
 
@@ -264,7 +265,10 @@ FORMATO OBRIGATÓRIO:
 }
 `.trim();
 
-    const input = `
+   Analise o edital abaixo e responda somente em JSON.
+
+${fullText}
+`;`
 ARQUIVO: ${document.name}
 CATEGORIA: ${document.category || "Edital"}
 RESUMO EXISTENTE: ${document.summary || "Não disponível"}
