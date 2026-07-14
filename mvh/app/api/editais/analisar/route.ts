@@ -559,7 +559,7 @@ const finalSchema = {
 
 
 
-const finalCoreSchema = {
+const finalGeneralSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
@@ -573,8 +573,6 @@ const finalCoreSchema = {
     execution_deadline: { type: "string" },
     proposal_validity: { type: "string" },
     judgment_criterion: { type: "string" },
-    credentialing: finalSchema.properties.credentialing,
-    legal_qualification: finalSchema.properties.legal_qualification,
   },
   required: [
     "executive_summary",
@@ -587,28 +585,57 @@ const finalCoreSchema = {
     "execution_deadline",
     "proposal_validity",
     "judgment_criterion",
-    "credentialing",
-    "legal_qualification",
   ],
 } as const;
 
-const finalTechnicalSchema = {
+const finalCredentialingSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    credentialing: finalSchema.properties.credentialing,
+  },
+  required: ["credentialing"],
+} as const;
+
+const finalLegalSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    legal_qualification: finalSchema.properties.legal_qualification,
+  },
+  required: ["legal_qualification"],
+} as const;
+
+const finalFiscalLaborSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
     fiscal_labor_qualification:
       finalSchema.properties.fiscal_labor_qualification,
+  },
+  required: ["fiscal_labor_qualification"],
+} as const;
+
+const finalCreaCatSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
     crea_requirements: finalSchema.properties.crea_requirements,
     cat_requirements: finalSchema.properties.cat_requirements,
+  },
+  required: ["crea_requirements", "cat_requirements"],
+} as const;
+
+const finalTechnicalCertificatesSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
     technical_certificates:
       finalSchema.properties.technical_certificates,
     other_technical_requirements:
       finalSchema.properties.other_technical_requirements,
   },
   required: [
-    "fiscal_labor_qualification",
-    "crea_requirements",
-    "cat_requirements",
     "technical_certificates",
     "other_technical_requirements",
   ],
@@ -620,27 +647,43 @@ const finalEconomicSchema = {
   properties: {
     economic_financial_qualification:
       finalSchema.properties.economic_financial_qualification,
-    declarations: finalSchema.properties.declarations,
-    guarantees: finalSchema.properties.guarantees,
-    site_visit: finalSchema.properties.site_visit,
-    deadlines: finalSchema.properties.deadlines,
   },
-  required: [
-    "economic_financial_qualification",
-    "declarations",
-    "guarantees",
-    "site_visit",
-    "deadlines",
-  ],
+  required: ["economic_financial_qualification"],
 } as const;
 
-const finalRiskSchema = {
+const finalDeclarationsSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
+    declarations: finalSchema.properties.declarations,
+  },
+  required: ["declarations"],
+} as const;
+
+const finalOperationalSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    guarantees: finalSchema.properties.guarantees,
+    site_visit: finalSchema.properties.site_visit,
+    deadlines: finalSchema.properties.deadlines,
     execution_measurement_payment:
       finalSchema.properties.execution_measurement_payment,
     penalties: finalSchema.properties.penalties,
+  },
+  required: [
+    "guarantees",
+    "site_visit",
+    "deadlines",
+    "execution_measurement_payment",
+    "penalties",
+  ],
+} as const;
+
+const finalRiskChecklistSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
     participation_recommendation:
       finalSchema.properties.participation_recommendation,
     recommendation_reason:
@@ -660,8 +703,6 @@ const finalRiskSchema = {
     attention_points: finalSchema.properties.attention_points,
   },
   required: [
-    "execution_measurement_payment",
-    "penalties",
     "participation_recommendation",
     "recommendation_reason",
     "risks",
@@ -677,70 +718,115 @@ const finalRiskSchema = {
 
 const FINAL_SECTION_CONFIG = [
   {
-    name: "enghub_final_core",
-    schema: finalCoreSchema,
+    name: "enghub_final_01_general",
+    schema: finalGeneralSchema,
+    maxOutputTokens: 1000,
+    instructions: `
+Extraia somente os dados principais:
+objeto, órgão, número, modalidade, sessão, valor estimado,
+prazo de execução, validade da proposta e julgamento.
+Produza um resumo executivo curto e factual.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_02_credentialing",
+    schema: finalCredentialingSchema,
+    maxOutputTokens: 1400,
+    instructions: `
+Audite somente o CREDENCIAMENTO.
+Liste representante, procuração, documento com foto, cadastro em plataforma,
+credenciamento eletrônico, prazo, etapa e consequência.
+Não misture com habilitação jurídica.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_03_legal",
+    schema: finalLegalSchema,
+    maxOutputTokens: 1500,
+    instructions: `
+Audite somente a HABILITAÇÃO JURÍDICA.
+Liste individualmente CNPJ, contrato/estatuto social, alterações,
+registro comercial, ata de eleição, procuração e documento do representante.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_04_fiscal_labor",
+    schema: finalFiscalLaborSchema,
     maxOutputTokens: 1800,
     instructions: `
-Extraia somente:
-- dados principais do edital;
-- Credenciamento;
-- Habilitação Jurídica.
-
-Liste cada documento e providência individualmente.
-Preserve obrigatoriedade, etapa, consequência e referência.
-Não inclua seções técnicas, fiscais ou econômico-financeiras.
+Audite somente a HABILITAÇÃO FISCAL E TRABALHISTA.
+Nunca agrupe certidões. Liste separadamente:
+Receita Federal/PGFN, Fazenda Estadual, Fazenda Municipal, FGTS,
+CNDT, inscrição estadual/municipal, SICAF e outras exigências encontradas.
     `.trim(),
   },
   {
-    name: "enghub_final_technical",
-    schema: finalTechnicalSchema,
-    maxOutputTokens: 2600,
+    name: "enghub_final_05_crea_cat",
+    schema: finalCreaCatSchema,
+    maxOutputTokens: 1800,
     instructions: `
-Extraia somente:
-- Habilitação Fiscal e Trabalhista;
-- CREA;
-- CAT;
-- cada atestado técnico;
-- outras exigências técnicas.
-
-Nunca agrupe certidões.
-Cada atestado deve conter serviço, quantidade, unidade, percentual,
-somatório, titular, aceitação público/privado, referência e evidência literal.
-Não inclua declarações ou execução contratual.
+Audite somente CREA, responsáveis técnicos, vínculos e CAT.
+Separe CREA da pessoa jurídica e de cada profissional.
+Informe titular da CAT, compatibilidade, registro e exigência de vínculo.
     `.trim(),
   },
   {
-    name: "enghub_final_economic",
+    name: "enghub_final_06_atestados",
+    schema: finalTechnicalCertificatesSchema,
+    maxOutputTokens: 3200,
+    instructions: `
+Audite somente ATESTADOS TÉCNICOS e demais exigências técnicas.
+Crie uma ficha separada para cada serviço.
+Preserve serviço exato, quantidade mínima, unidade, percentual,
+somatório, titular, público/privado, observações, referência e evidência literal.
+Exemplos: estrutura metálica 3.000 kg; cobertura em telha metálica 500 m².
+Não resuma vários serviços em um único item.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_07_economic",
     schema: finalEconomicSchema,
+    maxOutputTokens: 1800,
+    instructions: `
+Audite somente a HABILITAÇÃO ECONÔMICO-FINANCEIRA.
+Separe balanço, DRE, índices LG/LC/SG, capital social,
+patrimônio líquido, certidão de falência e respectivos valores/períodos.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_08_declarations",
+    schema: finalDeclarationsSchema,
     maxOutputTokens: 2200,
     instructions: `
-Extraia somente:
-- Habilitação Econômico-Financeira;
-- Declarações e respectivos anexos;
-- Garantias;
-- Visita/Vistoria Técnica;
-- Prazos importantes.
-
-Cada declaração deve conter anexo, nome, obrigatoriedade,
-etapa de entrega, modelo fornecido, consequência e referência.
+Audite somente DECLARAÇÕES E ANEXOS.
+Para cada declaração, informe:
+número do anexo, nome completo, obrigatoriedade, etapa de entrega,
+se existe modelo, consequência e referência.
+Exemplo: ANEXO II — Declaração de Fatos Supervenientes.
     `.trim(),
   },
   {
-    name: "enghub_final_risks",
-    schema: finalRiskSchema,
-    maxOutputTokens: 2600,
+    name: "enghub_final_09_operational",
+    schema: finalOperationalSchema,
+    maxOutputTokens: 2200,
     instructions: `
-Extraia somente:
-- Execução, medição e pagamento;
-- Penalidades;
-- Riscos;
-- Cláusulas potencialmente restritivas;
-- Checklist;
-- Itens eliminatórios;
-- Recomendação final.
-
-O checklist deve conter cada documento, declaração, atestado
-e providência concreta separadamente.
+Audite somente:
+garantias, visita/vistoria, prazos, execução, medição,
+pagamento, reajuste e penalidades.
+Destaque se visita ou atestado de vistoria é obrigatório e eliminatório.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_10_risks_checklist",
+    schema: finalRiskChecklistSchema,
+    maxOutputTokens: 3000,
+    instructions: `
+Produza somente:
+recomendação, riscos, cláusulas potencialmente restritivas,
+itens eliminatórios e checklist final.
+O checklist deve conter um item individual para cada documento,
+certidão, declaração, anexo, CREA, CAT, atestado e providência.
+Não use categorias genéricas.
     `.trim(),
   },
 ] as const;
@@ -1786,6 +1872,8 @@ async function processFinalSection(
     throw new Error("Seção final inválida.");
   }
 
+  const config = FINAL_SECTION_CONFIG[sectionIndex];
+
   const { data: existing, error: existingError } = await supabase
     .from("bid_analysis_final_sections")
     .select("*")
@@ -1796,7 +1884,11 @@ async function processFinalSection(
 
   if (existingError) throw existingError;
 
-  if (existing?.status === "Concluído" && existing.section_data) {
+  if (
+    existing?.status === "Concluído" &&
+    existing.section_data &&
+    existing.section_name === config.name
+  ) {
     return {
       section_index: sectionIndex,
       status: "Concluído",
@@ -1805,7 +1897,6 @@ async function processFinalSection(
   }
 
   const source = await getFinalSourceData(analysisId, context);
-  const config = FINAL_SECTION_CONFIG[sectionIndex];
 
   const rowPayload = {
     organization_id: organizationId,

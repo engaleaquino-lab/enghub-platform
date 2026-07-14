@@ -266,7 +266,7 @@ export default function BidAnalyzerPage() {
         );
       }
 
-      const totalFinalSections = 4;
+      const totalFinalSections = 10;
       const totalSteps = totalBatches + totalMerges + totalFinalSections + 1;
       let completedSteps = completedBatches + completedMerges;
 
@@ -339,10 +339,16 @@ export default function BidAnalyzerPage() {
       }
 
       const finalLabels = [
-        "Dados gerais, credenciamento e habilitação jurídica",
-        "Habilitação fiscal, trabalhista e técnica",
-        "Econômico-financeira, declarações, garantias e prazos",
-        "Execução, riscos, itens eliminatórios e checklist",
+        "Dados principais do edital",
+        "Credenciamento",
+        "Habilitação Jurídica",
+        "Habilitação Fiscal e Trabalhista",
+        "CREA, responsáveis técnicos e CAT",
+        "Atestados e demais exigências técnicas",
+        "Habilitação Econômico-Financeira",
+        "Declarações e Anexos",
+        "Garantias, visita, prazos, execução e pagamento",
+        "Riscos, itens eliminatórios e checklist final",
       ];
 
       for (
@@ -351,7 +357,7 @@ export default function BidAnalyzerPage() {
         sectionIndex += 1
       ) {
         setProgressLabel(
-          `Consolidação final ${sectionIndex + 1} de ${totalFinalSections}: ` +
+          `Auditoria final ${sectionIndex + 1} de ${totalFinalSections}: ` +
             `${finalLabels[sectionIndex]}…`,
         );
 
@@ -370,7 +376,7 @@ export default function BidAnalyzerPage() {
         );
       }
 
-      setProgressLabel("Juntando as quatro seções finais…");
+      setProgressLabel("Juntando os dez módulos auditados…");
 
       const result = await requestStep(
         {
