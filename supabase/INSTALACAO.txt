@@ -1,0 +1,40 @@
+ENGHUB — SPRINT 07: BIBLIOTECA OPERACIONAL
+
+O QUE ESTÁ INCLUÍDO
+- Upload de PDF, DOCX, XLSX, XLS, CSV, TXT, MD e imagens.
+- Limite de 30 MB.
+- Extração de texto de PDF, Word, Excel, CSV e texto.
+- Classificação automática.
+- Resumo e descrição.
+- Divisão em trechos para o Copiloto.
+- Pesquisa por nome, resumo, categoria e contrato.
+- Alertas de validade.
+- Abertura segura com link temporário.
+- Exclusão do banco e do Storage.
+- Remoção automática do arquivo se o cadastro falhar.
+- Storage privado e políticas por organização.
+
+INSTALAÇÃO
+
+1. Execute no Supabase:
+   mvh/sql/SPRINT_07_BIBLIOTECA_OPERACIONAL.sql
+
+2. Envie a pasta mvh completa ao GitHub.
+
+Commit:
+Sprint 07 - Biblioteca operacional
+
+3. Aguarde o deploy automático da Vercel.
+
+TESTE
+- Abra Biblioteca Inteligente.
+- Clique em Adicionar documento.
+- Envie primeiro um PDF com texto selecionável.
+- Abra o documento salvo.
+- Pesquise pelo nome.
+- Faça uma pergunta sobre o documento no Copiloto.
+
+OBSERVAÇÃO
+Imagens são armazenadas e organizadas, mas esta versão não executa OCR
+automático. PDFs digitalizados sem texto também ficam salvos, porém podem
+aparecer com processamento parcial.
