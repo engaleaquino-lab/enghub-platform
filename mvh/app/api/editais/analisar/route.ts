@@ -528,12 +528,6 @@ const finalSchema = {
     "agency",
     "notice_number",
     "modality",
-    "bidding_type",
-    "dispute_format",
-    "platform",
-    "process_number",
-    "execution_regime",
-    "session_location",
     "session_date",
     "estimated_value",
     "execution_deadline",
@@ -595,6 +589,12 @@ const finalGeneralSchema = {
     "agency",
     "notice_number",
     "modality",
+    "bidding_type",
+    "dispute_format",
+    "platform",
+    "process_number",
+    "execution_regime",
+    "session_location",
     "session_date",
     "estimated_value",
     "execution_deadline",
@@ -609,7 +609,9 @@ const finalCredentialingSchema = {
   properties: {
     credentialing: finalSchema.properties.credentialing,
   },
-  required: ["credentialing"],
+  required: [
+    "credentialing",
+  ],
 } as const;
 
 const finalLegalSchema = {
@@ -618,7 +620,9 @@ const finalLegalSchema = {
   properties: {
     legal_qualification: finalSchema.properties.legal_qualification,
   },
-  required: ["legal_qualification"],
+  required: [
+    "legal_qualification",
+  ],
 } as const;
 
 const finalFiscalLaborSchema = {
@@ -628,7 +632,9 @@ const finalFiscalLaborSchema = {
     fiscal_labor_qualification:
       finalSchema.properties.fiscal_labor_qualification,
   },
-  required: ["fiscal_labor_qualification"],
+  required: [
+    "fiscal_labor_qualification",
+  ],
 } as const;
 
 const finalCreaCatSchema = {
@@ -638,7 +644,10 @@ const finalCreaCatSchema = {
     crea_requirements: finalSchema.properties.crea_requirements,
     cat_requirements: finalSchema.properties.cat_requirements,
   },
-  required: ["crea_requirements", "cat_requirements"],
+  required: [
+    "crea_requirements",
+    "cat_requirements",
+  ],
 } as const;
 
 const finalTechnicalCertificatesSchema = {
@@ -663,7 +672,9 @@ const finalEconomicSchema = {
     economic_financial_qualification:
       finalSchema.properties.economic_financial_qualification,
   },
-  required: ["economic_financial_qualification"],
+  required: [
+    "economic_financial_qualification",
+  ],
 } as const;
 
 const finalDeclarationsSchema = {
@@ -672,7 +683,9 @@ const finalDeclarationsSchema = {
   properties: {
     declarations: finalSchema.properties.declarations,
   },
-  required: ["declarations"],
+  required: [
+    "declarations",
+  ],
 } as const;
 
 const finalProposalSchema = {
@@ -958,6 +971,40 @@ type ChatCompletionMessage = {
   refusal?: string | null;
 };
 
+
+function validateStrictSchema(
+  schemaName: string,
+  schema: any,
+) {
+  const properties = Object.keys(schema?.properties || {});
+  const required = Array.isArray(schema?.required)
+    ? schema.required
+    : [];
+
+  const missing = properties.filter(
+    (key) => !required.includes(key),
+  );
+
+  const extra = required.filter(
+    (key: string) => !properties.includes(key),
+  );
+
+  if (missing.length || extra.length) {
+    throw new Error(
+      `Schema inválido (${schemaName}). ` +
+        `Faltando em required: ${missing.join(", ") || "nenhum"}. ` +
+        `Chaves extras em required: ${extra.join(", ") || "nenhuma"}.`,
+    );
+  }
+
+  if (schema?.additionalProperties !== false) {
+    throw new Error(
+      `Schema inválido (${schemaName}): ` +
+        `additionalProperties deve ser false.`,
+    );
+  }
+}
+
 async function callStructuredOpenAI(args: {
   apiKey: string;
   instructions: string;
@@ -969,7 +1016,9 @@ async function callStructuredOpenAI(args: {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= OPENAI_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController();
+    validateStrictSchema(args.schemaName, args.schema);
+
+  const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort(),
       OPENAI_TIMEOUT_MS,

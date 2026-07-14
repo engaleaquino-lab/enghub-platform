@@ -1,6 +1,6 @@
 {
   "name": "enghub-2",
-  "version": "2.18.0",
+  "version": "2.19.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "validate:schemas": "node scripts/validate-openai-schemas.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.5.2",
