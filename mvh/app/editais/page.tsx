@@ -168,21 +168,79 @@ export default function BidAnalyzerPage() {
       setLoading(true);
       setError("");
       setProgress(0);
-      setProgressLabel("Preparando a análise integral…");
+      setProgressLabel("Verificando análise anterior…");
       setMessage(
-        "O edital inteiro será processado em chamadas curtas e independentes, evitando o limite da Vercel.",
+        "O sistema verificará se existem etapas concluídas antes de iniciar.",
       );
 
-      const start = await requestAnalysis({
-        action: "start",
+      const resumeResult = await requestAnalysis({
+        action: "resume",
         document_id: selectedDocument,
       });
 
-      const analysisId = String(start.analysis_id || "");
-      const totalBatches = Number(start.total_batches || 0);
-      const totalMerges = Number(start.total_merges || 0);
-      const totalSteps = totalBatches + totalMerges + 1;
-      let completedSteps = 0;
+      let analysisId = "";
+      let totalBatches = 0;
+      let totalMerges = 0;
+      let completedBatches = 0;
+      let completedMerges = 0;
+      let batchStatuses: Array<{
+        batch_index: number;
+        status: string;
+      }> = [];
+      let mergeStatuses: Array<{
+        merge_index: number;
+        status: string;
+      }> = [];
+
+      if (resumeResult.resume) {
+        analysisId = String(resumeResult.resume.analysis_id || "");
+        totalBatches = Number(
+          resumeResult.resume.total_batches || 0,
+        );
+        totalMerges = Number(
+          resumeResult.resume.total_merges || 0,
+        );
+        completedBatches = Number(
+          resumeResult.resume.completed_batches || 0,
+        );
+        completedMerges = Number(
+          resumeResult.resume.completed_merges || 0,
+        );
+        batchStatuses = resumeResult.resume.batch_statuses || [];
+        mergeStatuses = resumeResult.resume.merge_statuses || [];
+
+        setMessage(
+          `Retomando análise anterior: ${completedBatches} lote(s) e ` +
+            `${completedMerges} consolidação(ões) já concluídos.`,
+        );
+      } else {
+        const start = await requestAnalysis({
+          action: "start",
+          document_id: selectedDocument,
+        });
+
+        analysisId = String(start.analysis_id || "");
+        totalBatches = Number(start.total_batches || 0);
+        totalMerges = Number(start.total_merges || 0);
+        batchStatuses = Array.from(
+          { length: totalBatches },
+          (_, batchIndex) => ({
+            batch_index: batchIndex,
+            status: "Pendente",
+          }),
+        );
+        mergeStatuses = Array.from(
+          { length: totalMerges },
+          (_, mergeIndex) => ({
+            merge_index: mergeIndex,
+            status: "Pendente",
+          }),
+        );
+
+        setMessage(
+          "Nova análise criada. O edital inteiro será processado em etapas.",
+        );
+      }
 
       if (
         !analysisId ||
@@ -190,15 +248,30 @@ export default function BidAnalyzerPage() {
         totalMerges < 1
       ) {
         throw new Error(
-          "Não foi possível preparar a análise integral.",
+          "Não foi possível preparar ou retomar a análise.",
         );
       }
+
+      const totalSteps = totalBatches + totalMerges + 1;
+      let completedSteps = completedBatches + completedMerges;
+
+      setProgress(
+        Math.round((completedSteps / totalSteps) * 100),
+      );
 
       for (
         let batchIndex = 0;
         batchIndex < totalBatches;
         batchIndex += 1
       ) {
+        const existing = batchStatuses.find(
+          (item) => item.batch_index === batchIndex,
+        );
+
+        if (existing?.status === "Concluído") {
+          continue;
+        }
+
         setProgressLabel(
           `Lendo o edital: lote ${batchIndex + 1} de ${totalBatches}…`,
         );
@@ -223,6 +296,14 @@ export default function BidAnalyzerPage() {
         mergeIndex < totalMerges;
         mergeIndex += 1
       ) {
+        const existing = mergeStatuses.find(
+          (item) => item.merge_index === mergeIndex,
+        );
+
+        if (existing?.status === "Concluído") {
+          continue;
+        }
+
         setProgressLabel(
           `Organizando resultados: grupo ${mergeIndex + 1} de ${totalMerges}…`,
         );
@@ -252,19 +333,20 @@ export default function BidAnalyzerPage() {
         "Análise final",
       );
 
-      completedSteps += 1;
       setProgress(100);
       setSelectedAnalysis(result.analysis);
       setProgressLabel("Análise integral concluída.");
       setMessage(
-        `Análise concluída: ${start.total_chunks} trecho(s), ` +
-          `${totalBatches} lote(s) e ${totalMerges} consolidação(ões).`,
+        `Análise concluída com ${totalBatches} lote(s) e ` +
+          `${totalMerges} consolidação(ões).`,
       );
 
       await load();
     } catch (cause: any) {
       setError(cause.message);
-      setMessage("");
+      setMessage(
+        "As etapas já concluídas foram preservadas. Clique novamente em Analisar edital para continuar.",
+      );
       setProgressLabel("");
     } finally {
       setLoading(false);

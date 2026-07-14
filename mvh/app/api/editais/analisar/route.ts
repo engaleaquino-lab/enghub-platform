@@ -7,11 +7,12 @@ export const maxDuration = 60;
 
 const CHUNKS_PER_BATCH = 1;
 const BATCHES_PER_MERGE = 3;
-const OPENAI_TIMEOUT_MS = 20_000;
+const OPENAI_TIMEOUT_MS = 45_000;
 const OPENAI_ATTEMPTS = 1;
 
 type Action =
   | "start"
+  | "resume"
   | "process_batch"
   | "process_merge"
   | "consolidate";
@@ -339,7 +340,7 @@ async function callStructuredOpenAI(args: {
 
       if (lastError.name === "AbortError") {
         lastError = new Error(
-          "Esta etapa ultrapassou 20 segundos e será repetida pela tela.",
+          "Esta etapa ultrapassou 45 segundos e será repetida pela tela.",
         );
       }
 
@@ -519,6 +520,65 @@ async function getAnalysis(
   if (!data) throw new Error("Análise não encontrada.");
 
   return data;
+}
+
+
+async function resumeAnalysis(
+  documentId: string,
+  context: ApiContext,
+) {
+  const { supabase, organizationId } = context;
+
+  const { data: analysis, error: analysisError } = await supabase
+    .from("bid_analyses")
+    .select("id,status,created_at")
+    .eq("document_id", documentId)
+    .eq("organization_id", organizationId)
+    .in("status", [
+      "Preparando",
+      "Erro",
+      "Processando",
+      "Consolidando",
+    ])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (analysisError) throw analysisError;
+
+  if (!analysis) {
+    return null;
+  }
+
+  const { data: batches, error: batchesError } = await supabase
+    .from("bid_analysis_batches")
+    .select("batch_index,status")
+    .eq("analysis_id", analysis.id)
+    .eq("organization_id", organizationId)
+    .order("batch_index", { ascending: true });
+
+  if (batchesError) throw batchesError;
+
+  const { data: merges, error: mergesError } = await supabase
+    .from("bid_analysis_merges")
+    .select("merge_index,status")
+    .eq("analysis_id", analysis.id)
+    .eq("organization_id", organizationId)
+    .order("merge_index", { ascending: true });
+
+  if (mergesError) throw mergesError;
+
+  return {
+    analysis_id: analysis.id,
+    total_batches: batches?.length || 0,
+    total_merges: merges?.length || 0,
+    completed_batches:
+      batches?.filter((item) => item.status === "Concluído").length || 0,
+    completed_merges:
+      merges?.filter((item) => item.status === "Concluído").length || 0,
+    batch_statuses: batches || [],
+    merge_statuses: merges || [],
+  };
 }
 
 async function processBatch(
@@ -921,6 +981,18 @@ export async function POST(request: NextRequest) {
         },
         500,
       );
+    }
+
+    if (action === "resume") {
+      const documentId = String(body.document_id || "");
+
+      if (!documentId) {
+        return json({ error: "Selecione um edital." }, 400);
+      }
+
+      return json({
+        resume: await resumeAnalysis(documentId, context),
+      });
     }
 
     if (action === "start") {
