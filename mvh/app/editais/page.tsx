@@ -98,18 +98,17 @@ export default function BidAnalyzerPage() {
     if (!data) return { documents: 0, technical: 0, risks: 0, checklist: 0 };
 
     const documents =
-      (data.legal_documents?.length || 0) +
-      (data.fiscal_documents?.length || 0) +
-      (data.labor_documents?.length || 0) +
-      (data.economic_documents?.length || 0) +
+      (data.credentialing?.length || 0) +
+      (data.legal_qualification?.length || 0) +
+      (data.fiscal_labor_qualification?.length || 0) +
+      (data.economic_financial_qualification?.length || 0) +
       (data.declarations?.length || 0);
 
     const technical =
-      (data.crea_legal_entity?.length || 0) +
-      (data.crea_individual?.length || 0) +
-      (data.required_professionals?.length || 0) +
+      (data.crea_requirements?.length || 0) +
       (data.cat_requirements?.length || 0) +
-      (data.technical_certificates?.length || 0);
+      (data.technical_certificates?.length || 0) +
+      (data.other_technical_requirements?.length || 0);
 
     return {
       documents,
@@ -633,53 +632,93 @@ export default function BidAnalyzerPage() {
                 </div>
               </section>
 
-              <div className="professional-analysis-grid">
-                <section className="card">
-                  <h3>Habilitação jurídica</h3>
-                  {list(data.legal_documents)}
-                </section>
-
-                <section className="card">
-                  <h3>Regularidade fiscal</h3>
-                  {list(data.fiscal_documents)}
-                </section>
-
-                <section className="card">
-                  <h3>Regularidade trabalhista</h3>
-                  {list(data.labor_documents)}
-                </section>
-
-                <section className="card">
-                  <h3>CREA da empresa</h3>
-                  {list(data.crea_legal_entity)}
-                </section>
-
-                <section className="card">
-                  <h3>CREA dos profissionais</h3>
-                  {list(data.crea_individual)}
-                </section>
-
-                <section className="card">
-                  <h3>Profissionais exigidos</h3>
-                  {list(data.required_professionals)}
-                </section>
-
-                <section className="card">
-                  <h3>CAT</h3>
-                  {list(data.cat_requirements)}
+              <div className="professional-analysis-grid ordered-sections">
+                <section className="card professional-wide">
+                  <h3>1. Credenciamento</h3>
+                  <div className="requirement-table">
+                    {(data.credentialing || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`credential-${index}`}>
+                        <strong>{item.requirement}</strong>
+                        <span><b>Obrigatório:</b> {item.mandatory}</span>
+                        <span><b>Etapa/Prazo:</b> {item.deadline_or_stage}</span>
+                        <span><b>Consequência:</b> {item.consequence}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
                 </section>
 
                 <section className="card professional-wide">
-                  <h3>Atestados técnicos exigidos</h3>
+                  <h3>2. Habilitação Jurídica</h3>
+                  <div className="requirement-table">
+                    {(data.legal_qualification || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`legal-${index}`}>
+                        <strong>{item.document}</strong>
+                        <span>{item.details}</span>
+                        <span><b>Obrigatório:</b> {item.mandatory}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="card professional-wide">
+                  <h3>3. Habilitação Fiscal e Trabalhista</h3>
+                  <div className="requirement-table">
+                    {(data.fiscal_labor_qualification || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`fiscal-${index}`}>
+                        <strong>{item.document}</strong>
+                        <span><b>Órgão/abrangência:</b> {item.issuing_body_or_scope}</span>
+                        <span><b>Validade/condição:</b> {item.validity_or_condition}</span>
+                        <span><b>Obrigatório:</b> {item.mandatory}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="card professional-wide">
+                  <h3>4. Habilitação Técnica — CREA e CAT</h3>
+                  <div className="technical-two-columns">
+                    <div>
+                      <h4>CREA</h4>
+                      {(data.crea_requirements || []).map((item: any, index: number) => (
+                        <article className="requirement-row" key={`crea-${index}`}>
+                          <strong>{item.holder}</strong>
+                          <span>{item.professional_or_entity}</span>
+                          <span>{item.requirement}</span>
+                          <small>{item.source_reference}</small>
+                        </article>
+                      ))}
+                    </div>
+                    <div>
+                      <h4>CAT</h4>
+                      {(data.cat_requirements || []).map((item: any, index: number) => (
+                        <article className="requirement-row" key={`cat-${index}`}>
+                          <strong>{item.requirement}</strong>
+                          <span><b>Titular:</b> {item.holder}</span>
+                          <span><b>Vínculo:</b> {item.linkage_requirement}</span>
+                          <small>{item.source_reference}</small>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="card professional-wide">
+                  <h3>4.1. Atestados Técnicos Exigidos</h3>
                   <div className="technical-certificate-list">
                     {(data.technical_certificates || []).map((item: any, index: number) => (
-                      <article className="technical-certificate-item" key={`${item.service}-${index}`}>
+                      <article className="technical-certificate-item detailed" key={`certificate-${index}`}>
                         <strong>{item.service || "Serviço não identificado"}</strong>
-                        <span>Quantidade mínima: {item.minimum_quantity || "Não informada"}</span>
-                        <span>Percentual mínimo: {item.minimum_percentage || "Não informado"}</span>
-                        <span>Somatório: {item.accepts_sum || "Não identificado"}</span>
-                        <span>Titular exigido: {item.required_holder || "Não identificado"}</span>
-                        {item.observations && <small>{item.observations}</small>}
+                        <span><b>Quantidade mínima:</b> {item.minimum_quantity || "Não informada"} {item.unit || ""}</span>
+                        <span><b>Percentual:</b> {item.minimum_percentage || "Não informado"}</span>
+                        <span><b>Somatório:</b> {item.accepts_sum || "Não identificado"}</span>
+                        <span><b>Titular:</b> {item.required_holder || "Não identificado"}</span>
+                        <span><b>Público/privado:</b> {item.public_or_private_allowed || "Não identificado"}</span>
+                        <span><b>Observações:</b> {item.observations || "—"}</span>
+                        <small><b>Referência:</b> {item.source_reference}</small>
+                        <blockquote>{item.literal_evidence}</blockquote>
                       </article>
                     ))}
                     {!data.technical_certificates?.length && (
@@ -688,59 +727,109 @@ export default function BidAnalyzerPage() {
                   </div>
                 </section>
 
-                <section className="card">
-                  <h3>Documentos econômico-financeiros</h3>
-                  {list(data.economic_documents)}
+                <section className="card professional-wide">
+                  <h3>4.2. Outras Exigências Técnicas</h3>
+                  <div className="requirement-table">
+                    {(data.other_technical_requirements || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`other-tech-${index}`}>
+                        <strong>{item.requirement}</strong>
+                        <span>{item.details}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="card professional-wide">
+                  <h3>5. Habilitação Econômico-Financeira</h3>
+                  <div className="requirement-table">
+                    {(data.economic_financial_qualification || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`economic-${index}`}>
+                        <strong>{item.document_or_index}</strong>
+                        <span><b>Valor/condição:</b> {item.required_value_or_condition}</span>
+                        <span><b>Período/referência:</b> {item.period_or_reference}</span>
+                        <span><b>Obrigatório:</b> {item.mandatory}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="card professional-wide">
+                  <h3>6. Declarações e Anexos</h3>
+                  <div className="declaration-grid">
+                    {(data.declarations || []).map((item: any, index: number) => (
+                      <article className="declaration-card" key={`declaration-${index}`}>
+                        <span className="annex-badge">{item.annex || "Anexo não identificado"}</span>
+                        <strong>{item.name}</strong>
+                        <span><b>Obrigatória:</b> {item.mandatory}</span>
+                        <span><b>Quando entregar:</b> {item.delivery_stage}</span>
+                        <span><b>Modelo no edital:</b> {item.model_provided}</span>
+                        <span><b>Consequência:</b> {item.consequence}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
                 </section>
 
                 <section className="card">
-                  <h3>Índices financeiros</h3>
-                  {list(data.financial_indexes)}
+                  <h3>7. Garantias</h3>
+                  <div className="requirement-table">
+                    {(data.guarantees || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`guarantee-${index}`}>
+                        <strong>{item.type}</strong>
+                        <span>{item.percentage_or_value}</span>
+                        <span>{item.accepted_modalities}</span>
+                        <span>{item.deadline}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
                 </section>
 
                 <section className="card">
-                  <h3>Capital ou patrimônio mínimo</h3>
-                  {list(data.minimum_capital_or_equity)}
+                  <h3>8. Visita/Vistoria Técnica</h3>
+                  <div className="requirement-table">
+                    {(data.site_visit || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`visit-${index}`}>
+                        <strong>Obrigatória: {item.mandatory}</strong>
+                        <span>{item.date_time_location}</span>
+                        <span><b>Responsável:</b> {item.responsible_person}</span>
+                        <span><b>Documento:</b> {item.required_document}</span>
+                        <span><b>Alternativa:</b> {item.alternative_declaration}</span>
+                        <span><b>Consequência:</b> {item.consequence}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
                 </section>
 
-                <section className="card">
-                  <h3>Declarações obrigatórias</h3>
-                  {list(data.declarations)}
+                <section className="card professional-wide">
+                  <h3>9. Execução, Medição e Pagamento</h3>
+                  <div className="requirement-table">
+                    {(data.execution_measurement_payment || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`execution-${index}`}>
+                        <strong>{item.topic}</strong>
+                        <span>{item.rule}</span>
+                        <span>{item.deadline_or_index}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
                 </section>
 
-                <section className="card">
-                  <h3>Garantias</h3>
-                  {list(data.guarantees)}
-                </section>
-
-                <section className="card">
-                  <h3>Visita técnica</h3>
-                  {list(data.site_visit)}
-                </section>
-
-                <section className="card">
-                  <h3>Execução</h3>
-                  {list(data.execution_conditions)}
-                </section>
-
-                <section className="card">
-                  <h3>Medição</h3>
-                  {list(data.measurement_conditions)}
-                </section>
-
-                <section className="card">
-                  <h3>Pagamento</h3>
-                  {list(data.payment_conditions)}
-                </section>
-
-                <section className="card">
-                  <h3>Reajuste</h3>
-                  {list(data.adjustment_conditions)}
-                </section>
-
-                <section className="card">
-                  <h3>Penalidades</h3>
-                  {list(data.penalties)}
+                <section className="card professional-wide">
+                  <h3>10. Penalidades</h3>
+                  <div className="requirement-table">
+                    {(data.penalties || []).map((item: any, index: number) => (
+                      <article className="requirement-row" key={`penalty-${index}`}>
+                        <strong>{item.penalty}</strong>
+                        <span>{item.trigger}</span>
+                        <span>{item.percentage_or_duration}</span>
+                        <small>{item.source_reference}</small>
+                      </article>
+                    ))}
+                  </div>
                 </section>
               </div>
 
@@ -749,7 +838,7 @@ export default function BidAnalyzerPage() {
                 <div className="analysis-table-wrap">
                   <table className="table">
                     <thead>
-                      <tr><th>Evento</th><th>Data</th><th>Detalhe</th></tr>
+                      <tr><th>Evento</th><th>Data</th><th>Detalhe</th><th>Referência</th></tr>
                     </thead>
                     <tbody>
                       {(data.deadlines || []).map((row: any, index: number) => (
@@ -757,10 +846,11 @@ export default function BidAnalyzerPage() {
                           <td>{row.item}</td>
                           <td>{dateBR(row.date)}</td>
                           <td>{row.detail || "—"}</td>
+                          <td>{row.source_reference || "—"}</td>
                         </tr>
                       ))}
                       {!data.deadlines?.length && (
-                        <tr><td colSpan={3} className="empty">Nenhum prazo identificado.</td></tr>
+                        <tr><td colSpan={4} className="empty">Nenhum prazo identificado.</td></tr>
                       )}
                     </tbody>
                   </table>

@@ -360,3 +360,64 @@ select.input{appearance:auto}
 @media(max-width:1050px){
   .knockout-grid{grid-template-columns:1fr}
 }
+
+
+/* Sprint 17 — estrutura literal do edital */
+.ordered-sections{grid-template-columns:repeat(2,minmax(0,1fr))}
+.requirement-table{display:grid;gap:10px}
+.requirement-row{
+  display:grid;
+  gap:6px;
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:#061522;
+}
+.requirement-row strong{color:var(--green)}
+.requirement-row span{color:var(--text)}
+.requirement-row small{color:var(--muted)}
+.technical-two-columns{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+.technical-two-columns h4{margin:0 0 10px}
+.technical-certificate-item.detailed blockquote{
+  margin:4px 0 0;
+  padding:10px 12px;
+  border-left:3px solid var(--green);
+  background:#041019;
+  color:#cbd5e1;
+  font-size:.9rem;
+}
+.declaration-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.declaration-card{
+  display:grid;
+  gap:7px;
+  padding:14px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:#061522;
+}
+.declaration-card strong{color:var(--text);font-size:1rem}
+.declaration-card span{color:var(--text)}
+.declaration-card small{color:var(--muted)}
+.annex-badge{
+  width:max-content;
+  padding:4px 8px;
+  border-radius:999px;
+  background:#17392f;
+  color:#8ff0cb!important;
+  font-size:.76rem;
+  font-weight:900;
+  text-transform:uppercase;
+}
+@media(max-width:850px){
+  .ordered-sections,
+  .technical-two-columns,
+  .declaration-grid{grid-template-columns:1fr}
+}

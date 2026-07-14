@@ -35,38 +35,62 @@ const compactBatchSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    general_data: { type: "array", maxItems: 10, items: { type: "string" } },
-    legal_documents: { type: "array", maxItems: 12, items: { type: "string" } },
-    fiscal_documents: { type: "array", maxItems: 14, items: { type: "string" } },
-    labor_documents: { type: "array", maxItems: 8, items: { type: "string" } },
-    crea_requirements: { type: "array", maxItems: 10, items: { type: "string" } },
-    cat_requirements: { type: "array", maxItems: 10, items: { type: "string" } },
-    technical_certificates: { type: "array", maxItems: 16, items: { type: "string" } },
-    economic_requirements: { type: "array", maxItems: 14, items: { type: "string" } },
-    declarations: { type: "array", maxItems: 14, items: { type: "string" } },
-    guarantees: { type: "array", maxItems: 10, items: { type: "string" } },
-    site_visit: { type: "array", maxItems: 8, items: { type: "string" } },
-    deadlines: { type: "array", maxItems: 12, items: { type: "string" } },
-    execution_payment: { type: "array", maxItems: 14, items: { type: "string" } },
-    penalties: { type: "array", maxItems: 10, items: { type: "string" } },
-    risks_restrictions: { type: "array", maxItems: 12, items: { type: "string" } },
+    credentialing: {
+      type: "array",
+      maxItems: 14,
+      items: { type: "string" },
+    },
+    legal_qualification: {
+      type: "array",
+      maxItems: 14,
+      items: { type: "string" },
+    },
+    fiscal_labor_qualification: {
+      type: "array",
+      maxItems: 18,
+      items: { type: "string" },
+    },
+    technical_qualification: {
+      type: "array",
+      maxItems: 22,
+      items: { type: "string" },
+    },
+    economic_financial_qualification: {
+      type: "array",
+      maxItems: 18,
+      items: { type: "string" },
+    },
+    declarations_and_annexes: {
+      type: "array",
+      maxItems: 20,
+      items: { type: "string" },
+    },
+    guarantees_visits_and_deadlines: {
+      type: "array",
+      maxItems: 18,
+      items: { type: "string" },
+    },
+    execution_measurement_payment: {
+      type: "array",
+      maxItems: 18,
+      items: { type: "string" },
+    },
+    elimination_and_attention: {
+      type: "array",
+      maxItems: 18,
+      items: { type: "string" },
+    },
   },
   required: [
-    "general_data",
-    "legal_documents",
-    "fiscal_documents",
-    "labor_documents",
-    "crea_requirements",
-    "cat_requirements",
-    "technical_certificates",
-    "economic_requirements",
-    "declarations",
-    "guarantees",
-    "site_visit",
-    "deadlines",
-    "execution_payment",
-    "penalties",
-    "risks_restrictions",
+    "credentialing",
+    "legal_qualification",
+    "fiscal_labor_qualification",
+    "technical_qualification",
+    "economic_financial_qualification",
+    "declarations_and_annexes",
+    "guarantees_visits_and_deadlines",
+    "execution_measurement_payment",
+    "elimination_and_attention",
   ],
 } as const;
 
@@ -80,21 +104,115 @@ const finalSchema = {
     agency: { type: "string" },
     notice_number: { type: "string" },
     modality: { type: "string" },
-    session_date: { anyOf: [{ type: "string" }, { type: "null" }] },
-    estimated_value: { anyOf: [{ type: "number" }, { type: "null" }] },
+    session_date: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+    },
+    estimated_value: {
+      anyOf: [{ type: "number" }, { type: "null" }],
+    },
     execution_deadline: { type: "string" },
     proposal_validity: { type: "string" },
     judgment_criterion: { type: "string" },
 
-    legal_documents: { type: "array", items: { type: "string" } },
-    fiscal_documents: { type: "array", items: { type: "string" } },
-    labor_documents: { type: "array", items: { type: "string" } },
+    credentialing: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          requirement: { type: "string" },
+          mandatory: { type: "string" },
+          deadline_or_stage: { type: "string" },
+          consequence: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "requirement",
+          "mandatory",
+          "deadline_or_stage",
+          "consequence",
+          "source_reference",
+        ],
+      },
+    },
 
-    crea_legal_entity: { type: "array", items: { type: "string" } },
-    crea_individual: { type: "array", items: { type: "string" } },
-    required_professionals: { type: "array", items: { type: "string" } },
+    legal_qualification: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          document: { type: "string" },
+          details: { type: "string" },
+          mandatory: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: ["document", "details", "mandatory", "source_reference"],
+      },
+    },
 
-    cat_requirements: { type: "array", items: { type: "string" } },
+    fiscal_labor_qualification: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          document: { type: "string" },
+          issuing_body_or_scope: { type: "string" },
+          validity_or_condition: { type: "string" },
+          mandatory: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "document",
+          "issuing_body_or_scope",
+          "validity_or_condition",
+          "mandatory",
+          "source_reference",
+        ],
+      },
+    },
+
+    crea_requirements: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          holder: { type: "string" },
+          professional_or_entity: { type: "string" },
+          requirement: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "holder",
+          "professional_or_entity",
+          "requirement",
+          "source_reference",
+        ],
+      },
+    },
+
+    cat_requirements: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          requirement: { type: "string" },
+          holder: { type: "string" },
+          linkage_requirement: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "requirement",
+          "holder",
+          "linkage_requirement",
+          "source_reference",
+        ],
+      },
+    },
+
     technical_certificates: {
       type: "array",
       items: {
@@ -103,29 +221,139 @@ const finalSchema = {
         properties: {
           service: { type: "string" },
           minimum_quantity: { type: "string" },
+          unit: { type: "string" },
           minimum_percentage: { type: "string" },
           accepts_sum: { type: "string" },
           required_holder: { type: "string" },
+          public_or_private_allowed: { type: "string" },
           observations: { type: "string" },
+          source_reference: { type: "string" },
+          literal_evidence: { type: "string" },
         },
         required: [
           "service",
           "minimum_quantity",
+          "unit",
           "minimum_percentage",
           "accepts_sum",
           "required_holder",
+          "public_or_private_allowed",
           "observations",
+          "source_reference",
+          "literal_evidence",
         ],
       },
     },
 
-    economic_documents: { type: "array", items: { type: "string" } },
-    financial_indexes: { type: "array", items: { type: "string" } },
-    minimum_capital_or_equity: { type: "array", items: { type: "string" } },
+    other_technical_requirements: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          requirement: { type: "string" },
+          details: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: ["requirement", "details", "source_reference"],
+      },
+    },
 
-    declarations: { type: "array", items: { type: "string" } },
-    guarantees: { type: "array", items: { type: "string" } },
-    site_visit: { type: "array", items: { type: "string" } },
+    economic_financial_qualification: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          document_or_index: { type: "string" },
+          required_value_or_condition: { type: "string" },
+          period_or_reference: { type: "string" },
+          mandatory: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "document_or_index",
+          "required_value_or_condition",
+          "period_or_reference",
+          "mandatory",
+          "source_reference",
+        ],
+      },
+    },
+
+    declarations: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          annex: { type: "string" },
+          name: { type: "string" },
+          mandatory: { type: "string" },
+          delivery_stage: { type: "string" },
+          model_provided: { type: "string" },
+          consequence: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "annex",
+          "name",
+          "mandatory",
+          "delivery_stage",
+          "model_provided",
+          "consequence",
+          "source_reference",
+        ],
+      },
+    },
+
+    guarantees: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          type: { type: "string" },
+          percentage_or_value: { type: "string" },
+          accepted_modalities: { type: "string" },
+          deadline: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "type",
+          "percentage_or_value",
+          "accepted_modalities",
+          "deadline",
+          "source_reference",
+        ],
+      },
+    },
+
+    site_visit: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          mandatory: { type: "string" },
+          date_time_location: { type: "string" },
+          responsible_person: { type: "string" },
+          required_document: { type: "string" },
+          alternative_declaration: { type: "string" },
+          consequence: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "mandatory",
+          "date_time_location",
+          "responsible_person",
+          "required_document",
+          "alternative_declaration",
+          "consequence",
+          "source_reference",
+        ],
+      },
+    },
 
     deadlines: {
       type: "array",
@@ -134,18 +362,50 @@ const finalSchema = {
         additionalProperties: false,
         properties: {
           item: { type: "string" },
-          date: { anyOf: [{ type: "string" }, { type: "null" }] },
+          date: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+          },
           detail: { type: "string" },
+          source_reference: { type: "string" },
         },
-        required: ["item", "date", "detail"],
+        required: ["item", "date", "detail", "source_reference"],
       },
     },
 
-    execution_conditions: { type: "array", items: { type: "string" } },
-    measurement_conditions: { type: "array", items: { type: "string" } },
-    payment_conditions: { type: "array", items: { type: "string" } },
-    adjustment_conditions: { type: "array", items: { type: "string" } },
-    penalties: { type: "array", items: { type: "string" } },
+    execution_measurement_payment: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          topic: { type: "string" },
+          rule: { type: "string" },
+          deadline_or_index: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: ["topic", "rule", "deadline_or_index", "source_reference"],
+      },
+    },
+
+    penalties: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          penalty: { type: "string" },
+          trigger: { type: "string" },
+          percentage_or_duration: { type: "string" },
+          source_reference: { type: "string" },
+        },
+        required: [
+          "penalty",
+          "trigger",
+          "percentage_or_duration",
+          "source_reference",
+        ],
+      },
+    },
 
     participation_recommendation: {
       type: "string",
@@ -159,13 +419,18 @@ const finalSchema = {
         type: "object",
         additionalProperties: false,
         properties: {
-          level: { type: "string", enum: ["Baixo", "Médio", "Alto"] },
+          level: {
+            type: "string",
+            enum: ["Baixo", "Médio", "Alto"],
+          },
           item: { type: "string" },
           reason: { type: "string" },
+          source_reference: { type: "string" },
         },
-        required: ["level", "item", "reason"],
+        required: ["level", "item", "reason", "source_reference"],
       },
     },
+
     restrictive_clauses: {
       type: "array",
       items: {
@@ -174,10 +439,12 @@ const finalSchema = {
         properties: {
           item: { type: "string" },
           explanation: { type: "string" },
+          source_reference: { type: "string" },
         },
-        required: ["item", "explanation"],
+        required: ["item", "explanation", "source_reference"],
       },
     },
+
     checklist: {
       type: "array",
       items: {
@@ -186,13 +453,15 @@ const finalSchema = {
         properties: {
           item: { type: "string" },
           category: { type: "string" },
-          priority: { type: "string", enum: ["Baixa", "Média", "Alta"] },
+          priority: {
+            type: "string",
+            enum: ["Baixa", "Média", "Alta"],
+          },
+          source_reference: { type: "string" },
         },
-        required: ["item", "category", "priority"],
+        required: ["item", "category", "priority", "source_reference"],
       },
     },
-    clarification_questions: { type: "array", items: { type: "string" } },
-    attention_points: { type: "array", items: { type: "string" } },
 
     mandatory_documents: {
       type: "array",
@@ -238,6 +507,15 @@ const finalSchema = {
         required: ["item", "type", "reason", "evidence"],
       },
     },
+
+    clarification_questions: {
+      type: "array",
+      items: { type: "string" },
+    },
+    attention_points: {
+      type: "array",
+      items: { type: "string" },
+    },
   },
   required: [
     "executive_summary",
@@ -250,36 +528,30 @@ const finalSchema = {
     "execution_deadline",
     "proposal_validity",
     "judgment_criterion",
-    "legal_documents",
-    "fiscal_documents",
-    "labor_documents",
-    "crea_legal_entity",
-    "crea_individual",
-    "required_professionals",
+    "credentialing",
+    "legal_qualification",
+    "fiscal_labor_qualification",
+    "crea_requirements",
     "cat_requirements",
     "technical_certificates",
-    "economic_documents",
-    "financial_indexes",
-    "minimum_capital_or_equity",
+    "other_technical_requirements",
+    "economic_financial_qualification",
     "declarations",
     "guarantees",
     "site_visit",
     "deadlines",
-    "execution_conditions",
-    "measurement_conditions",
-    "payment_conditions",
-    "adjustment_conditions",
+    "execution_measurement_payment",
     "penalties",
     "participation_recommendation",
     "recommendation_reason",
     "risks",
     "restrictive_clauses",
     "checklist",
-    "clarification_questions",
-    "attention_points",
     "mandatory_documents",
     "mandatory_actions",
     "disqualification_risks",
+    "clarification_questions",
+    "attention_points",
   ],
 } as const;
 
@@ -721,22 +993,30 @@ async function processBatch(
       schema: compactBatchSchema,
       maxOutputTokens: 650,
       instructions: `
-Você analisa uma pequena parte de um edital público brasileiro.
+Você analisa trechos de um edital público brasileiro.
 
-Leia integralmente os trechos recebidos e classifique cada exigência na categoria correta.
+Leia integralmente todo o lote e classifique literalmente as exigências nas seções:
+1. Credenciamento;
+2. Habilitação jurídica;
+3. Habilitação fiscal e trabalhista;
+4. Habilitação técnica;
+5. Habilitação econômico-financeira;
+6. Declarações e anexos;
+7. Garantias, visita técnica e prazos;
+8. Execução, medição e pagamento;
+9. Itens eliminatórios e pontos de atenção.
 
 REGRAS:
-- Registre cada documento separadamente.
-- Nunca use termos genéricos como "certidões fiscais" quando o edital nomear certidão federal, estadual, municipal, FGTS ou CNDT.
-- Diferencie CREA da pessoa jurídica e CREA da pessoa física.
-- Em CAT e atestados, preserve serviço, quantitativo, percentual, titular exigido, vínculo e aceitação ou proibição de somatório.
-- Diferencie balanço, DRE, índices, patrimônio líquido e capital social.
-- Preserve datas, valores, percentuais, quantitativos e prazos.
-- Não invente informações.
-- Não repita itens.
-- Cada item deve ter no máximo 220 caracteres.
-- Quando uma categoria não aparecer neste lote, use lista vazia.
-- Não conclua que algo não existe apenas porque não apareceu neste lote.
+- Cada item deve começar com a referência "[Trecho N]" correspondente.
+- Preserve exatamente serviços, quantidades, unidades, percentuais, prazos e condições.
+- Exemplo técnico: "[Trecho 18] Atestado de estrutura metálica: mínimo 3.000 kg; somatório não informado."
+- Nunca resuma "certidões": liste Receita Federal/PGFN, Estadual, Municipal, FGTS e CNDT separadamente.
+- Diferencie credenciamento de habilitação jurídica.
+- Diferencie CREA da empresa, CREA dos profissionais, CAT e atestados.
+- Para declarações, preserve o número do anexo e o nome completo.
+- Quando houver "sob pena de inabilitação/desclassificação", registre literalmente.
+- Não invente informações e não conclua ausência com base em um único lote.
+- Elimine apenas duplicidades dentro do próprio lote.
       `.trim(),
       input: `
 DOCUMENTO: ${
@@ -855,16 +1135,16 @@ async function processMerge(
       schema: compactBatchSchema,
       maxOutputTokens: 900,
       instructions: `
-Você consolida análises parciais consecutivas do mesmo edital.
+Você consolida análises literais de trechos consecutivos do mesmo edital.
 
 REGRAS:
-- Mantenha cada documento individualmente identificado.
-- Não transforme certidão federal, estadual, municipal, FGTS ou CNDT em uma expressão genérica.
-- Preserve separadamente CREA jurídico, CREA dos profissionais, CAT, atestados e respectivos quantitativos.
-- Preserve balanço, DRE, índices e capital ou patrimônio mínimo.
-- Elimine apenas duplicidades reais.
-- Preserve números, datas, percentuais, quantitativos, titulares e condições.
-- Cada item deve ter no máximo 220 caracteres.
+- Preserve as referências "[Trecho N]".
+- Não misture Credenciamento com Habilitação Jurídica.
+- Não misture Fiscal/Trabalhista com Econômico-Financeira.
+- Preserve cada certidão individualmente.
+- Preserve cada atestado técnico individualmente, com serviço, quantidade, unidade, percentual, titular e somatório.
+- Preserve o número e o nome de cada anexo/declaracão.
+- Elimine somente duplicidades reais.
 - Não invente informações.
       `.trim(),
       input: `
@@ -1153,6 +1433,91 @@ function auditCriticalRequirements(fullText: string): CriticalAudit {
   return audit;
 }
 
+
+type LiteralAuditItem = {
+  category: string;
+  reference: string;
+  text: string;
+};
+
+function literalWindow(
+  chunks: Array<{ chunk_index: number; content: string }>,
+  category: string,
+  pattern: RegExp,
+  radius = 320,
+): LiteralAuditItem[] {
+  const items: LiteralAuditItem[] = [];
+
+  for (const chunk of chunks) {
+    const content = String(chunk.content || "");
+    const normalized = normalizeSearchText(content);
+
+    for (const match of normalized.matchAll(pattern)) {
+      const index = match.index || 0;
+      const start = Math.max(0, index - radius);
+      const end = Math.min(content.length, index + radius);
+
+      items.push({
+        category,
+        reference: `Trecho ${chunk.chunk_index + 1}`,
+        text: content.slice(start, end).replace(/\s+/g, " ").trim(),
+      });
+    }
+  }
+
+  return uniqueObjects(
+    items,
+    (item) => `${item.category}-${item.reference}-${item.text}`,
+  ).slice(0, 120);
+}
+
+function buildLiteralAudit(
+  chunks: Array<{ chunk_index: number; content: string }>,
+) {
+  return [
+    ...literalWindow(
+      chunks,
+      "Credenciamento",
+      /\bcredenciamento\b|\bcredenciar\b|\brepresentante\b|\bprocuracao\b/gi,
+    ),
+    ...literalWindow(
+      chunks,
+      "Fiscal e trabalhista",
+      /cndt|debitos trabalhistas|fgts|fazenda estadual|fazenda municipal|receita federal|pgfn|divida ativa/gi,
+    ),
+    ...literalWindow(
+      chunks,
+      "CREA, CAT e atestados",
+      /\bcrea\b|\bcat\b|certidao de acervo tecnico|atestado tecnico|capacidade tecnica|parcela de maior relevancia|somatorio/gi,
+    ),
+    ...literalWindow(
+      chunks,
+      "Quantitativos técnicos",
+      /\bkg\b|\bm²\b|\bm2\b|\bm³\b|\bm3\b|\bton\b|\bmetros?\b|\bpercentual\b|\b%\b/gi,
+    ),
+    ...literalWindow(
+      chunks,
+      "Econômico-financeira",
+      /balanco patrimonial|\bdre\b|liquidez geral|liquidez corrente|solvencia|capital social|patrimonio liquido|falencia/gi,
+    ),
+    ...literalWindow(
+      chunks,
+      "Declarações e anexos",
+      /\banexo\s+[ivxlcdm0-9]+\b|declaracao de|modelo de declaracao/gi,
+    ),
+    ...literalWindow(
+      chunks,
+      "Visita técnica",
+      /visita tecnica|vistoria tecnica|atestado de vistoria|declaracao de vistoria|comprovante de visita/gi,
+    ),
+    ...literalWindow(
+      chunks,
+      "Consequência eliminatória",
+      /sob pena de inabilitacao|sera inabilitad|sob pena de desclassificacao|sera desclassificad/gi,
+    ),
+  ];
+}
+
 async function consolidateAnalysis(
   analysisId: string,
   apiKey: string,
@@ -1176,6 +1541,13 @@ async function consolidateAnalysis(
 
   const criticalAudit = auditCriticalRequirements(
     completeDocumentText,
+  );
+
+  const literalAudit = buildLiteralAudit(
+    (auditChunks || []).map((chunk) => ({
+      chunk_index: Number(chunk.chunk_index || 0),
+      content: String(chunk.content || ""),
+    })),
   );
 
   const { data: merges, error: mergesError } = await supabase
@@ -1236,19 +1608,19 @@ A recomendação de participação é preliminar e deve considerar
 riscos, habilitação, prazo, execução e clareza do edital.
 
 DETALHAMENTO OBRIGATÓRIO:
-- Liste CNPJ, contrato social, procuração e documentos dos representantes individualmente.
-- Liste Receita Federal/PGFN, Fazenda Estadual, Fazenda Municipal, FGTS e CNDT separadamente quando exigidos.
-- Separe CREA da empresa, CREA de cada profissional, profissionais exigidos e vínculos.
-- Em CAT e atestados, descreva serviço, quantitativo mínimo, percentual, titular, possibilidade de somatório e observações.
-- Separe balanço, DRE, índices, capital social, patrimônio líquido e certidão de falência.
-- Liste cada declaração obrigatória individualmente.
-- Detalhe garantias, visita técnica, prazos, medição, pagamento, reajuste e penalidades.
-- O checklist deve conter um item para cada documento ou providência concreta.
-- Crie "mandatory_documents" para documentos cuja ausência possa causar inabilitação ou desclassificação.
-- Crie "mandatory_actions" para providências como visita técnica, vistoria, credenciamento, envio de amostra ou garantia.
-- Crie "disqualification_risks" sempre que o edital usar expressões como "sob pena de", "será inabilitado" ou "será desclassificado".
-- CNDT, FGTS, certidões federal, estadual e municipal devem ser tratados individualmente.
-- Visita técnica e atestado de vistoria devem ser classificados como obrigatórios quando a redação indicar dever ou consequência eliminatória.
+- Estruture a resposta exatamente na ordem: Credenciamento; Habilitação Jurídica; Habilitação Fiscal e Trabalhista; Habilitação Técnica; Habilitação Econômico-Financeira; Declarações; Garantias/Visita/Prazos; Execução/Medição/Pagamento.
+- Credenciamento deve conter representante, procuração, documento pessoal, cadastro em plataforma, data/etapa e consequência.
+- Habilitação jurídica deve listar cada documento individualmente.
+- Fiscal e trabalhista deve listar Receita Federal/PGFN, Estadual, Municipal, FGTS e CNDT individualmente.
+- Habilitação técnica deve separar CREA da empresa, CREA dos profissionais, CAT, vínculo e cada atestado.
+- Para cada atestado, extraia serviço exato, quantidade mínima, unidade, percentual, titular, somatório, aceitação público/privado e referência.
+- Exemplo: estrutura metálica, mínimo 3.000 kg; cobertura em telha metálica, mínimo 500 m².
+- Econômico-financeira deve separar balanço, DRE, índices, capital social, patrimônio líquido e falência.
+- Declarações devem conter número do anexo, nome completo, obrigatoriedade, etapa de entrega, existência de modelo e consequência.
+- Nunca omita uma exigência encontrada na auditoria literal.
+- Use "Trecho N" como referência quando a página/item não estiver expressa no texto.
+- Só informe página ou item quando estiver literalmente disponível.
+- O checklist deve ter um item para cada documento, declaração, atestado e providência concreta.
       `.trim(),
       input: `
 DOCUMENTO: ${
@@ -1258,6 +1630,10 @@ DOCUMENTO: ${
 CONSOLIDAÇÕES DE TODO O EDITAL:
 
 ${JSON.stringify(merges)}
+
+AUDITORIA LITERAL DE EXPRESSÕES CRÍTICAS DO TEXTO COMPLETO:
+
+${JSON.stringify(literalAudit)}
       `.trim(),
     });
 
