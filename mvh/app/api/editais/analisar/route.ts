@@ -1,4 +1,3 @@
-
 import { NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
@@ -222,8 +221,7 @@ export async function POST(request: NextRequest) {
       analysisId = created.id;
     }
 
-    const instructions =
-      Responda SOMENTE em JSON válido.`
+    const instructions = `
 Você é um analista sênior de licitações e obras públicas brasileiras.
 Analise o edital fornecido com rigor técnico e administrativo.
 
@@ -265,10 +263,9 @@ FORMATO OBRIGATÓRIO:
 }
 `.trim();
 
-   Analise o edital abaixo e responda somente em JSON.
+    const input = `
+Responda exclusivamente em JSON válido, sem markdown e sem qualquer texto fora do JSON.
 
-${fullText}
-`;`
 ARQUIVO: ${document.name}
 CATEGORIA: ${document.category || "Edital"}
 RESUMO EXISTENTE: ${document.summary || "Não disponível"}
@@ -306,14 +303,17 @@ ${fullText}
     } catch (error) {
       const message =
         error instanceof Error && error.name === "AbortError"
-          ? "A análise ultrapassou o tempo disponível. Tente novamente; o texto enviado já foi reduzido automaticamente."
+          ? "A análise ultrapassou o tempo disponível. Clique novamente em Analisar edital."
           : error instanceof Error
             ? error.message
             : "Falha de conexão com a OpenAI.";
 
       await supabase
         .from("bid_analyses")
-        .update({ status: "Erro", error_message: message })
+        .update({
+          status: "Erro",
+          error_message: message,
+        })
         .eq("id", analysisId);
 
       return json({ error: message }, 504);
@@ -384,14 +384,9 @@ ${fullText}
     return json({ analysis: saved });
   } catch (error) {
     console.error("/api/editais/analisar", error);
-
-    const message =
-      error instanceof SyntaxError
-        ? "A requisição enviada ao Leitor de Editais não é um JSON válido."
-        : error instanceof Error
-          ? error.message
-          : "Erro interno.";
-
-    return json({ error: message }, 500);
+    return json(
+      { error: error instanceof Error ? error.message : "Erro interno." },
+      500,
+    );
   }
 }
