@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
     const mimeType = String(body.mime_type || "");
     const fileSize = Number(body.file_size || 0);
     const description = String(body.description || "").trim();
+    const autoAnalyze = body.auto_analyze !== false;
     const contractId = String(body.contract_id || "") || null;
     const issueDate = String(body.issue_date || "") || null;
     const expiryDate = String(body.expiry_date || "") || null;
@@ -140,7 +141,15 @@ export async function POST(request: NextRequest) {
       const { error: chunksError } = await supabase.from("document_chunks").insert(rows);
       if (chunksError) console.error("document_chunks", chunksError);
     }
-    return json({ document, chunks: chunks.length });
+    return json({
+      document,
+      chunks: chunks.length,
+      category,
+      auto_analysis_eligible:
+        autoAnalyze &&
+        category.toLowerCase().includes("edital") &&
+        processingStatus === "Concluído",
+    });
   } catch (error) {
     console.error("/api/biblioteca/upload", error);
     return json({ error: error instanceof Error ? error.message : "Erro interno." }, 500);

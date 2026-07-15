@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import Modal from "@/components/Modal";
 import { currentOrg, dateBR, getSignedFileUrl, listRows } from "@/lib/supabase-data";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+import JSZip from "jszip";
 
 type LibraryDocument = {
   id: string;
@@ -20,6 +21,8 @@ type LibraryDocument = {
   summary?: string | null;
   storage_path?: string | null;
   created_at: string;
+  auto_analysis_status?: string | null;
+  last_analysis_id?: string | null;
 };
 
 
@@ -47,6 +50,79 @@ function fileSize(value?: number | null) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+
+const supportedZipExtensions = new Set([
+  "pdf",
+  "docx",
+  "xlsx",
+  "xls",
+  "csv",
+  "txt",
+  "md",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+]);
+
+function extensionOf(name: string) {
+  return name.split(".").pop()?.toLowerCase() || "";
+}
+
+function mimeFromName(name: string) {
+  const extension = extensionOf(name);
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    docx:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xlsx:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    xls: "application/vnd.ms-excel",
+    csv: "text/csv",
+    txt: "text/plain",
+    md: "text/markdown",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+  };
+  return map[extension] || "application/octet-stream";
+}
+
+function inferDocumentRole(
+  name: string,
+  category?: string | null,
+) {
+  const source = `${name} ${category || ""}`.toLowerCase();
+
+  if (/edital|concorr[eê]ncia|preg[aã]o/.test(source)) {
+    return "Edital";
+  }
+  if (/termo.?de.?refer[eê]ncia|\btr\b/.test(source)) {
+    return "Termo de Referência";
+  }
+  if (/projeto.?b[aá]sico/.test(source)) {
+    return "Projeto Básico";
+  }
+  if (/memorial/.test(source)) {
+    return "Memorial Descritivo";
+  }
+  if (/planilha|or[cç]amento|bdi|composi[cç][aã]o/.test(source)) {
+    return "Planilha Orçamentária";
+  }
+  if (/cronograma/.test(source)) {
+    return "Cronograma";
+  }
+  if (/minuta|contrato/.test(source)) {
+    return "Minuta Contratual";
+  }
+  if (/declara[cç][aã]o|anexo/.test(source)) {
+    return "Declarações/Modelos";
+  }
+
+  return "Outro Anexo";
+}
+
 export default function LibraryPage() {
   const [documents, setDocuments] = useState<LibraryDocument[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
@@ -58,6 +134,8 @@ export default function LibraryPage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisLabel, setAnalysisLabel] = useState("");
 
   async function load() {
     try {
@@ -107,67 +185,621 @@ export default function LibraryPage() {
     });
   }, [documents]);
 
+
+  async function analysisRequest(
+    body: Record<string, unknown>,
+    timeoutMs = 58_000,
+  ) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      timeoutMs,
+    );
+
+    try {
+      const response = await fetch("/api/editais/analisar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error || "Falha na análise automática.",
+        );
+      }
+
+      return payload;
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        throw new Error(
+          "Uma etapa da análise automática ultrapassou o tempo disponível.",
+        );
+      }
+
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  async function analysisStep(
+    body: Record<string, unknown>,
+    label: string,
+  ) {
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        return await analysisRequest(body);
+      } catch (error) {
+        lastError =
+          error instanceof Error
+            ? error
+            : new Error("Erro desconhecido.");
+
+        if (attempt < 2) {
+          setAnalysisLabel(
+            `${label}: repetindo etapa automaticamente…`,
+          );
+          await new Promise((resolve) =>
+            window.setTimeout(resolve, 1200),
+          );
+        }
+      }
+    }
+
+    throw new Error(
+      `${label}: ${lastError?.message || "falha."}`,
+    );
+  }
+
+  async function runAutomaticSingleAnalysis(
+    documentId: string,
+    documentName: string,
+  ) {
+    const labels = [
+      "Dados principais",
+      "Credenciamento",
+      "Habilitação Jurídica",
+      "Fiscal e Trabalhista",
+      "CREA e CAT",
+      "Atestados técnicos",
+      "Econômico-Financeira",
+      "Declarações e Anexos",
+      "Proposta, BDI e CPU",
+      "Vistoria, prazos e execução",
+      "Riscos",
+      "Itens eliminatórios",
+      "Checklist final",
+    ];
+
+    setAnalysisProgress(0);
+    setAnalysisLabel(
+      `Iniciando análise automática de ${documentName}…`,
+    );
+
+    const start = await analysisRequest({
+      action: "fast_start",
+      document_id: documentId,
+    });
+
+    const analysisId = String(start.analysis_id || "");
+    const total = Number(
+      start.total_sections || labels.length,
+    );
+
+    if (!analysisId) {
+      throw new Error(
+        "A análise automática não foi iniciada.",
+      );
+    }
+
+    const concurrency = 3;
+    let completed = 0;
+
+    for (
+      let offset = 0;
+      offset < total;
+      offset += concurrency
+    ) {
+      const indexes = Array.from(
+        {
+          length: Math.min(
+            concurrency,
+            total - offset,
+          ),
+        },
+        (_, index) => offset + index,
+      );
+
+      setAnalysisLabel(
+        `Analisando automaticamente: ${indexes
+          .map((index) => labels[index] || `Etapa ${index + 1}`)
+          .join(" • ")}`,
+      );
+
+      await Promise.all(
+        indexes.map((sectionIndex) =>
+          analysisStep(
+            {
+              action: "fast_process_section",
+              analysis_id: analysisId,
+              section_index: sectionIndex,
+            },
+            labels[sectionIndex] ||
+              `Etapa ${sectionIndex + 1}`,
+          ),
+        ),
+      );
+
+      completed += indexes.length;
+      setAnalysisProgress(
+        Math.round((completed / (total + 1)) * 100),
+      );
+    }
+
+    setAnalysisLabel("Finalizando análise automática…");
+
+    await analysisStep(
+      {
+        action: "fast_finalize",
+        analysis_id: analysisId,
+      },
+      "Finalização",
+    );
+
+    setAnalysisProgress(100);
+    setAnalysisLabel("Análise automática concluída.");
+  }
+
+  async function runAutomaticDossierAnalysis(
+    dossierId: string,
+    dossierTitle: string,
+  ) {
+    const labels = [
+      "Dados principais",
+      "Credenciamento",
+      "Habilitação Jurídica",
+      "Fiscal e Trabalhista",
+      "CREA e CAT",
+      "Atestados técnicos",
+      "Econômico-Financeira",
+      "Declarações e Anexos",
+      "Proposta, BDI e CPU",
+      "Vistoria, prazos e execução",
+      "Riscos",
+      "Itens eliminatórios",
+      "Checklist e referências cruzadas",
+    ];
+
+    setAnalysisProgress(0);
+    setAnalysisLabel(
+      `Iniciando análise automática do dossiê ${dossierTitle}…`,
+    );
+
+    const start = await analysisRequest({
+      action: "dossier_start",
+      dossier_id: dossierId,
+    });
+
+    const analysisId = String(start.analysis_id || "");
+    const total = Number(
+      start.total_sections || labels.length,
+    );
+
+    if (!analysisId) {
+      throw new Error(
+        "A análise automática do dossiê não foi iniciada.",
+      );
+    }
+
+    const concurrency = 3;
+    let completed = 0;
+
+    for (
+      let offset = 0;
+      offset < total;
+      offset += concurrency
+    ) {
+      const indexes = Array.from(
+        {
+          length: Math.min(
+            concurrency,
+            total - offset,
+          ),
+        },
+        (_, index) => offset + index,
+      );
+
+      setAnalysisLabel(
+        `Cruzando edital e anexos: ${indexes
+          .map((index) => labels[index] || `Etapa ${index + 1}`)
+          .join(" • ")}`,
+      );
+
+      await Promise.all(
+        indexes.map((sectionIndex) =>
+          analysisStep(
+            {
+              action: "dossier_process_section",
+              analysis_id: analysisId,
+              dossier_id: dossierId,
+              section_index: sectionIndex,
+            },
+            labels[sectionIndex] ||
+              `Etapa ${sectionIndex + 1}`,
+          ),
+        ),
+      );
+
+      completed += indexes.length;
+      setAnalysisProgress(
+        Math.round((completed / (total + 1)) * 100),
+      );
+    }
+
+    setAnalysisLabel(
+      "Finalizando análise automática do dossiê…",
+    );
+
+    await analysisStep(
+      {
+        action: "dossier_finalize",
+        analysis_id: analysisId,
+        dossier_id: dossierId,
+      },
+      "Finalização do dossiê",
+    );
+
+    setAnalysisProgress(100);
+    setAnalysisLabel(
+      "Análise automática do dossiê concluída.",
+    );
+  }
+
+  async function uploadOneFile(
+    file: File,
+    options: {
+      category?: string;
+      contractId?: string;
+      issueDate?: string;
+      expiryDate?: string;
+      description?: string;
+      autoAnalyze?: boolean;
+      storageFolder?: string;
+    },
+  ) {
+    let extractedText = "";
+
+    if (
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      setUploadProgress(`Extraindo texto: ${file.name}`);
+      extractedText = await extractPdfInBrowser(file);
+    }
+
+    const { orgId } = await currentOrg();
+    const safeName = file.name.replace(
+      /[^a-zA-Z0-9._-]/g,
+      "_",
+    );
+    const folder =
+      options.storageFolder || "library";
+    const storagePath =
+      `${orgId}/${folder}/${crypto.randomUUID()}-${safeName}`;
+
+    const storage = supabaseBrowser();
+    const { error: storageError } =
+      await storage.storage
+        .from("contract-files")
+        .upload(storagePath, file, {
+          contentType: file.type || undefined,
+          upsert: false,
+        });
+
+    if (storageError) throw storageError;
+
+    const response = await fetch("/api/biblioteca/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storage_path: storagePath,
+        name: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+        category: options.category || "",
+        contract_id: options.contractId || "",
+        issue_date: options.issueDate || "",
+        expiry_date: options.expiryDate || "",
+        description: options.description || "",
+        extracted_text: extractedText,
+        auto_analyze: options.autoAnalyze !== false,
+      }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        payload.error ||
+          `Falha no processamento de ${file.name}.`,
+      );
+    }
+
+    return payload;
+  }
+
+  async function extractZipFiles(zipFile: File) {
+    setUploadProgress("Abrindo arquivo ZIP");
+
+    const zip = await JSZip.loadAsync(
+      await zipFile.arrayBuffer(),
+    );
+
+    const entries = Object.values(zip.files).filter(
+      (entry) =>
+        !entry.dir &&
+        supportedZipExtensions.has(
+          extensionOf(entry.name),
+        ) &&
+        !entry.name.startsWith("__MACOSX/"),
+    );
+
+    if (!entries.length) {
+      throw new Error(
+        "O ZIP não contém arquivos compatíveis.",
+      );
+    }
+
+    const files: File[] = [];
+
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      setUploadProgress(
+        `Extraindo ${index + 1} de ${entries.length}: ${entry.name}`,
+      );
+
+      const blob = await entry.async("blob");
+      const cleanName =
+        entry.name.split("/").pop() || entry.name;
+
+      files.push(
+        new File([blob], cleanName, {
+          type: mimeFromName(cleanName),
+        }),
+      );
+    }
+
+    return files;
+  }
+
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const file = form.get("file") as File | null;
+
     if (!file?.name) {
       setError("Selecione um arquivo.");
       return;
     }
 
+    const autoAnalyze =
+      form.get("auto_analyze") === "on";
+
     try {
       setLoading(true);
       setError("");
-      setMessage("Enviando e processando o documento…");
-      setUploadProgress("Preparando arquivo");
-      let extractedText = "";
-      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-        setMessage("Lendo o PDF no navegador…");
-        setUploadProgress("Extraindo texto do PDF");
-        extractedText = await extractPdfInBrowser(file);
+      setMessage("Enviando e indexando documentos…");
+      setAnalysisProgress(0);
+      setAnalysisLabel("");
+
+      const commonOptions = {
+        contractId: String(
+          form.get("contract_id") || "",
+        ),
+        issueDate: String(
+          form.get("issue_date") || "",
+        ),
+        expiryDate: String(
+          form.get("expiry_date") || "",
+        ),
+        description: String(
+          form.get("description") || "",
+        ),
+        autoAnalyze,
+      };
+
+      const isZip =
+        file.type === "application/zip" ||
+        file.type === "application/x-zip-compressed" ||
+        file.name.toLowerCase().endsWith(".zip");
+
+      if (isZip) {
+        const extractedFiles =
+          await extractZipFiles(file);
+
+        const uploaded: any[] = [];
+
+        for (
+          let index = 0;
+          index < extractedFiles.length;
+          index += 1
+        ) {
+          const internalFile = extractedFiles[index];
+
+          setMessage(
+            `Importando arquivo ${index + 1} de ${extractedFiles.length}: ${internalFile.name}`,
+          );
+
+          const payload = await uploadOneFile(
+            internalFile,
+            {
+              ...commonOptions,
+              category: "",
+              autoAnalyze: false,
+              storageFolder: "library/zip",
+            },
+          );
+
+          uploaded.push(payload.document);
+        }
+
+        const editalDocuments = uploaded.filter(
+          (document) =>
+            String(document.category || "")
+              .toLowerCase()
+              .includes("edital"),
+        );
+
+        if (
+          autoAnalyze &&
+          editalDocuments.length &&
+          uploaded.length > 1
+        ) {
+          setMessage(
+            "Criando automaticamente o dossiê do ZIP…",
+          );
+
+          const roles = Object.fromEntries(
+            uploaded.map((document) => [
+              document.id,
+              inferDocumentRole(
+                document.name,
+                document.category,
+              ),
+            ]),
+          );
+
+          const dossierTitle =
+            file.name.replace(/\.zip$/i, "") ||
+            `Dossiê ${new Date().toLocaleDateString("pt-BR")}`;
+
+          const dossierResponse = await fetch(
+            "/api/editais/dossies",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                title: dossierTitle,
+                notice_number: "",
+                document_ids: uploaded.map(
+                  (document) => document.id,
+                ),
+                document_roles: roles,
+              }),
+            },
+          );
+
+          const dossierPayload =
+            await dossierResponse.json();
+
+          if (!dossierResponse.ok) {
+            throw new Error(
+              dossierPayload.error ||
+                "Os documentos foram importados, mas o dossiê não pôde ser criado.",
+            );
+          }
+
+          setOpen(false);
+          await load();
+
+          setMessage(
+            `${uploaded.length} documentos importados. Analisando automaticamente o dossiê…`,
+          );
+
+          await runAutomaticDossierAnalysis(
+            dossierPayload.dossier.id,
+            dossierTitle,
+          );
+
+          setMessage(
+            `ZIP processado: ${uploaded.length} documentos indexados e dossiê analisado automaticamente.`,
+          );
+        } else if (
+          autoAnalyze &&
+          editalDocuments.length === 1
+        ) {
+          setOpen(false);
+          await load();
+
+          await runAutomaticSingleAnalysis(
+            editalDocuments[0].id,
+            editalDocuments[0].name,
+          );
+
+          setMessage(
+            `ZIP importado com ${uploaded.length} documento(s). O edital foi analisado automaticamente.`,
+          );
+        } else {
+          setOpen(false);
+          await load();
+
+          setMessage(
+            `ZIP importado: ${uploaded.length} documento(s) indexado(s). ${
+              editalDocuments.length
+                ? "A análise automática estava desativada."
+                : "Nenhum arquivo foi classificado como Edital."
+            }`,
+          );
+        }
+      } else {
+        setUploadProgress(
+          "Enviando ao armazenamento seguro",
+        );
+
+        const payload = await uploadOneFile(file, {
+          ...commonOptions,
+          category: String(
+            form.get("category") || "",
+          ),
+        });
+
+        setOpen(false);
+        await load();
+
+        if (
+          autoAnalyze &&
+          payload.auto_analysis_eligible
+        ) {
+          setMessage(
+            "Documento indexado. Iniciando análise automática do edital…",
+          );
+
+          await runAutomaticSingleAnalysis(
+            payload.document.id,
+            payload.document.name,
+          );
+
+          setMessage(
+            `Edital indexado e analisado automaticamente. ${payload.chunks || 0} trecho(s) disponibilizado(s).`,
+          );
+        } else {
+          setMessage(
+            `Documento processado. ${payload.chunks || 0} trecho(s) disponibilizado(s) ao Copiloto.`,
+          );
+        }
       }
 
-      setMessage("Enviando o arquivo para a biblioteca…");
-      setUploadProgress("Enviando ao armazenamento seguro");
-      const { orgId } = await currentOrg();
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storagePath = `${orgId}/library/${crypto.randomUUID()}-${safeName}`;
-      const s = supabaseBrowser();
-      const { error: storageError } = await s.storage.from("contract-files").upload(storagePath, file, {
-        contentType: file.type || undefined,
-        upsert: false,
-      });
-      if (storageError) throw storageError;
-
-      setMessage("Extraindo, classificando e indexando o conteúdo…");
-      setUploadProgress("Classificando e indexando");
-      const response = await fetch("/api/biblioteca/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storage_path: storagePath,
-          name: file.name,
-          mime_type: file.type,
-          file_size: file.size,
-          category: String(form.get("category") || ""),
-          contract_id: String(form.get("contract_id") || ""),
-          issue_date: String(form.get("issue_date") || ""),
-          expiry_date: String(form.get("expiry_date") || ""),
-          description: String(form.get("description") || ""),
-          extracted_text: extractedText,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Falha no processamento.");
-      setMessage(`Documento processado. ${payload.chunks || 0} trecho(s) disponibilizado(s) ao Copiloto.`);
       setUploadProgress("");
-      setOpen(false);
+      formElement.reset();
       await load();
     } catch (cause: any) {
       setError(cause.message);
       setMessage("");
       setUploadProgress("");
+      setAnalysisLabel("");
     } finally {
       setLoading(false);
     }
@@ -213,6 +845,26 @@ export default function LibraryPage() {
 
       {error && <div className="warning">{error}</div>}
       {message && <div className="note">{message}</div>}
+
+      {analysisLabel && (
+        <section className="card automatic-analysis-progress">
+          <div>
+            <span className="eyebrow">ANÁLISE AUTOMÁTICA</span>
+            <strong>{analysisLabel}</strong>
+          </div>
+          <div className="analysis-progress-track">
+            <span
+              style={{
+                width: `${Math.max(
+                  3,
+                  analysisProgress,
+                )}%`,
+              }}
+            />
+          </div>
+          <small>{analysisProgress}% concluído</small>
+        </section>
+      )}
 
       <div className="grid kpis">
         <div className="card"><div className="muted">Documentos</div><div className="value">{documents.length}</div></div>
@@ -273,8 +925,18 @@ export default function LibraryPage() {
         <form className="form-grid" onSubmit={upload}>
           <div className="field full">
             <label>Arquivo</label>
-            <input className="input" name="file" type="file" accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,image/*" required />
-            <span className="muted">PDF, DOCX, Excel, CSV, texto ou imagem. O envio é feito diretamente ao armazenamento seguro.</span>
+            <input
+              className="input"
+              name="file"
+              type="file"
+              accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.zip,image/*"
+              required
+            />
+            <span className="muted">
+              PDF, DOCX, Excel, CSV, texto, imagem ou ZIP. Em um ZIP,
+              cada arquivo compatível será extraído, indexado e vinculado
+              automaticamente ao mesmo dossiê quando houver edital.
+            </span>
           </div>
 
           <div className="field full">
@@ -295,6 +957,9 @@ export default function LibraryPage() {
               <option>Edital</option><option>Contrato</option><option>Termo aditivo</option>
               <option>Atestado/CAT</option><option>ART/RRT</option><option>Certidão</option>
               <option>Medição</option><option>Ofício</option><option>Planilha/Orçamento</option>
+              <option>Termo de Referência</option><option>Projeto Básico</option>
+              <option>Memorial Descritivo</option><option>Cronograma</option>
+              <option>Minuta Contratual</option><option>Declarações/Modelos</option>
               <option>Documento geral</option>
             </select>
           </div>
@@ -311,6 +976,24 @@ export default function LibraryPage() {
 
           <div className="field"><label>Data de emissão</label><input className="input" name="issue_date" type="date" /></div>
           <div className="field"><label>Data de validade</label><input className="input" name="expiry_date" type="date" /></div>
+
+          <div className="field full auto-analysis-option">
+            <label className="checkbox-row">
+              <input
+                name="auto_analyze"
+                type="checkbox"
+                defaultChecked
+              />
+              <span>
+                <strong>Analisar automaticamente após a indexação</strong>
+                <small>
+                  Editais serão analisados sem precisar abrir a aba Leitor
+                  de Editais. ZIPs com edital e anexos gerarão um dossiê
+                  automático.
+                </small>
+              </span>
+            </label>
+          </div>
 
           {loading && uploadProgress && (
             <div className="full upload-progress">
