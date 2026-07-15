@@ -79,10 +79,30 @@ export default function BidAnalyzerPage() {
         ),
       );
 
-      const dossierResponse = await fetch("/api/editais/dossies", { cache: "no-store" });
-      const dossierPayload = await dossierResponse.json();
-      if (!dossierResponse.ok) throw new Error(dossierPayload.error || "Erro ao carregar dossiês.");
-      setDossiers(dossierPayload.dossiers || []);
+      try {
+        const dossierResponse = await fetch(
+          "/api/editais/dossies",
+          { cache: "no-store" },
+        );
+        const dossierPayload = await dossierResponse.json();
+
+        if (dossierResponse.ok) {
+          setDossiers(dossierPayload.dossiers || []);
+        } else {
+          setDossiers([]);
+          console.warn(
+            "Dossiês indisponíveis:",
+            dossierPayload.error || "Erro ao carregar dossiês.",
+          );
+        }
+      } catch (dossierError) {
+        setDossiers([]);
+        console.warn(
+          "Falha não bloqueante ao carregar dossiês:",
+          dossierError,
+        );
+      }
+
       setDocuments(eligible);
       setAnalyses((analysisRows.data || []) as AnalysisRow[]);
 
@@ -93,6 +113,8 @@ export default function BidAnalyzerPage() {
       if (!selectedAnalysis && analysisRows.data?.length) {
         setSelectedAnalysis(analysisRows.data[0] as AnalysisRow);
       }
+
+      setError("");
     } catch (cause: any) {
       setError(cause.message);
     }

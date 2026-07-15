@@ -5,11 +5,49 @@ export const dynamic = "force-dynamic";
 function json(data:unknown,status=200){return Response.json(data,{status});}
 async function context(){
  const supabase=await createSupabaseServerClient();
- const {data:{user}}=await supabase.auth.getUser();
- if(!user) throw new Error("Usuário não autenticado.");
- const {data:profile,error}=await supabase.from("profiles").select("organization_id").eq("id",user.id).single();
- if(error||!profile?.organization_id) throw new Error("Organização não encontrada.");
- return {supabase,user,organizationId:profile.organization_id};
+
+ const {
+  data:{user},
+  error:userError
+ }=await supabase.auth.getUser();
+
+ if(userError||!user){
+  throw new Error("Sessão inválida. Entre novamente.");
+ }
+
+ const {data:membership,error:membershipError}=await supabase
+  .from("organization_members")
+  .select("organization_id")
+  .eq("user_id",user.id)
+  .eq("status","active")
+  .limit(1)
+  .maybeSingle();
+
+ if(!membershipError&&membership?.organization_id){
+  return {
+   supabase,
+   user,
+   organizationId:String(membership.organization_id)
+  };
+ }
+
+ const {data:profile,error:profileError}=await supabase
+  .from("profiles")
+  .select("organization_id")
+  .eq("id",user.id)
+  .maybeSingle();
+
+ if(!profileError&&profile?.organization_id){
+  return {
+   supabase,
+   user,
+   organizationId:String(profile.organization_id)
+  };
+ }
+
+ throw new Error(
+  "Usuário sem organização ativa. Verifique o vínculo em organization_members."
+ );
 }
 export async function GET(){
  try{
