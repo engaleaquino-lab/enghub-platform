@@ -19,11 +19,15 @@ type Action =
   | "finalize"
   | "fast_start"
   | "fast_process_section"
-  | "fast_finalize";
+  | "fast_finalize"
+  | "dossier_start"
+  | "dossier_process_section"
+  | "dossier_finalize";
 
 type RequestBody = {
   action?: Action;
   document_id?: string;
+  dossier_id?: string;
   analysis_id?: string;
   batch_index?: number;
   merge_index?: number;
@@ -793,7 +797,7 @@ const finalOperationalSchema = {
   ],
 } as const;
 
-const finalRiskChecklistSchema = {
+const finalRisksSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
@@ -804,13 +808,6 @@ const finalRiskChecklistSchema = {
     risks: finalSchema.properties.risks,
     restrictive_clauses:
       finalSchema.properties.restrictive_clauses,
-    checklist: finalSchema.properties.checklist,
-    mandatory_documents:
-      finalSchema.properties.mandatory_documents,
-    mandatory_actions:
-      finalSchema.properties.mandatory_actions,
-    disqualification_risks:
-      finalSchema.properties.disqualification_risks,
     clarification_questions:
       finalSchema.properties.clarification_questions,
     attention_points: finalSchema.properties.attention_points,
@@ -820,14 +817,69 @@ const finalRiskChecklistSchema = {
     "recommendation_reason",
     "risks",
     "restrictive_clauses",
-    "checklist",
-    "mandatory_documents",
-    "mandatory_actions",
-    "disqualification_risks",
     "clarification_questions",
     "attention_points",
   ],
 } as const;
+
+const finalEliminatorySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    mandatory_documents:
+      finalSchema.properties.mandatory_documents,
+    mandatory_actions:
+      finalSchema.properties.mandatory_actions,
+    disqualification_risks:
+      finalSchema.properties.disqualification_risks,
+  },
+  required: [
+    "mandatory_documents",
+    "mandatory_actions",
+    "disqualification_risks",
+  ],
+} as const;
+
+const finalChecklistCrossSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    checklist: finalSchema.properties.checklist,
+    cross_document_findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          topic: { type: "string" },
+          base_document: { type: "string" },
+          complementary_document: { type: "string" },
+          consolidated_requirement: { type: "string" },
+          conflict_detected: { type: "string" },
+          conflict_description: { type: "string" },
+          source_references: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: [
+          "topic",
+          "base_document",
+          "complementary_document",
+          "consolidated_requirement",
+          "conflict_detected",
+          "conflict_description",
+          "source_references",
+        ],
+      },
+    },
+  },
+  required: [
+    "checklist",
+    "cross_document_findings",
+  ],
+} as const;
+
 
 const FINAL_SECTION_CONFIG = [
   {
@@ -951,16 +1003,57 @@ Aplique esta regra objetiva:
     `.trim(),
   },
   {
-    name: "enghub_final_11_risks_checklist",
-    schema: finalRiskChecklistSchema,
-    maxOutputTokens: 3000,
+    name: "enghub_final_11_risks",
+    schema: finalRisksSchema,
+    maxOutputTokens: 1500,
     instructions: `
 Produza somente:
-recomendação, riscos, cláusulas potencialmente restritivas,
-itens eliminatórios e checklist final.
-O checklist deve conter um item individual para cada documento,
-certidão, declaração, anexo, CREA, CAT, atestado e providência.
-Não use categorias genéricas.
+- recomendação de participação;
+- justificativa;
+- riscos contratuais, técnicos, financeiros e operacionais;
+- cláusulas potencialmente restritivas;
+- pontos de atenção;
+- perguntas de esclarecimento.
+
+Não monte checklist e não repita documentos de habilitação.
+Use listas curtas e objetivas.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_12_eliminatory",
+    schema: finalEliminatorySchema,
+    maxOutputTokens: 1700,
+    instructions: `
+Produza somente os ITENS ELIMINATÓRIOS.
+
+Separe:
+- documentos obrigatórios;
+- providências obrigatórias;
+- riscos expressos de inabilitação, desclassificação ou impedimento.
+
+Considere expressões como:
+"sob pena de", "será inabilitado", "será desclassificado",
+"não apresentação", "condição de participação" e "obrigatório".
+
+Não monte checklist geral.
+    `.trim(),
+  },
+  {
+    name: "enghub_final_13_checklist_cross",
+    schema: finalChecklistCrossSchema,
+    maxOutputTokens: 1900,
+    instructions: `
+Produza somente:
+- checklist final individualizado;
+- referências cruzadas entre edital e anexos;
+- complementações;
+- divergências entre documentos.
+
+Cada checklist deve corresponder a uma providência concreta:
+uma certidão, um CREA, uma CAT, um atestado, uma declaração,
+uma planilha, um cronograma, uma composição ou outra entrega.
+
+Não produza análise de riscos genérica.
     `.trim(),
   },
 ] as const;
@@ -2301,15 +2394,39 @@ const FAST_SECTION_KEYWORDS: string[][] = [
     "esclarecimento",
   ],
   [
+    "risco",
+    "restritiva",
+    "prazo curto",
+    "multa",
+    "penalidade",
+    "reajuste",
+    "pagamento",
+    "medicao",
+    "responsabilidade",
+    "obrigacao",
+  ],
+  [
     "sob pena",
     "inabilitacao",
     "desclassificacao",
     "impedimento",
-    "risco",
-    "restritiva",
     "obrigatorio",
     "devera apresentar",
     "nao apresentacao",
+    "condicao de participacao",
+    "eliminatorio",
+  ],
+  [
+    "checklist",
+    "devera apresentar",
+    "documentos exigidos",
+    "conforme anexo",
+    "termo de referencia",
+    "projeto basico",
+    "planilha",
+    "declaracao",
+    "atestado",
+    "certidao",
   ],
 ];
 
@@ -2375,7 +2492,9 @@ function selectRelevantChunks(
   const limit =
     sectionIndex === 5 || sectionIndex === 7 || sectionIndex === 8
       ? 30
-      : 22;
+      : sectionIndex >= 10
+        ? 14
+        : 22;
 
   scored
     .filter((chunk) => chunk.score > 0)
@@ -2385,6 +2504,229 @@ function selectRelevantChunks(
   return Array.from(selected.values())
     .sort((a, b) => a.chunk_index - b.chunk_index)
     .slice(0, limit + 8);
+}
+
+
+type DossierDocument = {
+  id: string;
+  name: string;
+  category: string | null;
+  role: string | null;
+};
+
+async function getDossierDocuments(
+  dossierId: string,
+  context: ApiContext,
+): Promise<DossierDocument[]> {
+  const { supabase, organizationId } = context;
+  const { data, error } = await supabase
+    .from("bid_dossier_documents")
+    .select("document_id,document_role,sort_order,company_documents!inner(id,name,category)")
+    .eq("dossier_id", dossierId)
+    .eq("organization_id", organizationId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    id: String(row.company_documents.id),
+    name: String(row.company_documents.name),
+    category: row.company_documents.category ? String(row.company_documents.category) : null,
+    role: row.document_role ? String(row.document_role) : null,
+  }));
+}
+
+async function dossierStartAnalysis(
+  dossierId: string,
+  context: ApiContext,
+) {
+  const { supabase, user, organizationId } = context;
+  const { data: dossier, error: dossierError } = await supabase
+    .from("bid_dossiers")
+    .select("id,title,notice_number")
+    .eq("id", dossierId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (dossierError) throw dossierError;
+  if (!dossier) throw new Error("Dossiê não encontrado.");
+  const documents = await getDossierDocuments(dossierId, context);
+  if (!documents.length) throw new Error("Adicione documentos ao dossiê.");
+  const { data: analysis, error } = await supabase
+    .from("bid_analyses")
+    .insert({
+      organization_id: organizationId,
+      document_id: documents[0].id,
+      dossier_id: dossierId,
+      created_by: user.id,
+      status: "Análise do dossiê",
+      extracted_data: {},
+      error_message: null,
+      processing_started_at: new Date().toISOString(),
+      last_heartbeat_at: new Date().toISOString(),
+      total_steps: FINAL_SECTION_CONFIG.length + 1,
+      completed_steps: 0,
+      current_step: "Preparando dossiê",
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return {
+    analysis_id: analysis.id,
+    dossier_id: dossierId,
+    dossier_title: dossier.title,
+    total_sections: FINAL_SECTION_CONFIG.length,
+    total_documents: documents.length,
+    documents,
+  };
+}
+
+async function dossierProcessSection(
+  analysisId: string,
+  dossierId: string,
+  sectionIndex: number,
+  apiKey: string,
+  context: ApiContext,
+) {
+  const { supabase, organizationId } = context;
+  if (!Number.isInteger(sectionIndex) || sectionIndex < 0 || sectionIndex >= FINAL_SECTION_CONFIG.length) {
+    throw new Error("Módulo do dossiê inválido.");
+  }
+  const config = FINAL_SECTION_CONFIG[sectionIndex];
+  const analysis = await getAnalysis(analysisId, context);
+  const documents = await getDossierDocuments(dossierId, context);
+  const sectionName = `dossier_${config.name}`;
+  const { data: existing, error: existingError } = await supabase
+    .from("bid_analysis_final_sections")
+    .select("*")
+    .eq("analysis_id", analysisId)
+    .eq("section_index", sectionIndex)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing?.status === "Concluído" && existing.section_data && existing.section_name === sectionName) {
+    return { section_index: sectionIndex, status: "Concluído", reused: true };
+  }
+
+  const selected: any[] = [];
+  for (const document of documents) {
+    const { data: chunks, error: chunksError } = await supabase
+      .from("document_chunks")
+      .select("chunk_index,content")
+      .eq("document_id", document.id)
+      .eq("organization_id", organizationId)
+      .order("chunk_index", { ascending: true });
+    if (chunksError) throw chunksError;
+    const normalized = (chunks || []).map((chunk: any) => ({
+      chunk_index: Number(chunk.chunk_index || 0),
+      content: String(chunk.content || ""),
+    }));
+    for (const chunk of selectRelevantChunks(normalized, sectionIndex)) {
+      selected.push({
+        ...chunk,
+        document_name: document.name,
+        document_role: document.role || document.category || "Anexo",
+        score: scoreChunkForSection(chunk.content, FAST_SECTION_KEYWORDS[sectionIndex] || []),
+      });
+    }
+  }
+  const limit =
+    sectionIndex === 5 || sectionIndex === 7 || sectionIndex === 8
+      ? 42
+      : sectionIndex >= 10
+        ? 18
+        : 30;
+  const relevant = selected
+    .sort((a,b) => b.score-a.score || a.document_name.localeCompare(b.document_name) || a.chunk_index-b.chunk_index)
+    .slice(0,limit)
+    .sort((a,b) => a.document_name.localeCompare(b.document_name) || a.chunk_index-b.chunk_index);
+  const inputText = relevant.map((chunk) =>
+    `[DOCUMENTO: ${chunk.document_name} | TIPO: ${chunk.document_role} | TRECHO ${chunk.chunk_index+1}]\n${chunk.content}`
+  ).join("\n\n").slice(0,52000);
+
+  const rowPayload = {
+    organization_id: organizationId,
+    analysis_id: analysisId,
+    document_id: analysis.document_id,
+    section_index: sectionIndex,
+    section_name: sectionName,
+    status: "Processando",
+    error_message: null,
+    attempts: Number(existing?.attempts || 0)+1,
+  };
+  if (existing) {
+    const { error } = await supabase.from("bid_analysis_final_sections").update(rowPayload).eq("id",existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("bid_analysis_final_sections").insert(rowPayload);
+    if (error) throw error;
+  }
+
+  try {
+    const result = await callStructuredOpenAI({
+      apiKey,
+      schemaName: sectionName,
+      schema: config.schema,
+      maxOutputTokens: config.maxOutputTokens,
+      instructions: `
+Você audita uma licitação composta por vários documentos.
+${config.instructions}
+REGRAS:
+- Trate edital, termo de referência, projeto básico, memorial, planilha, cronograma, minuta e anexos como um único processo.
+- Sempre identifique Documento + Trecho N na referência.
+- Quando o edital criar a obrigação e outro documento detalhar quantitativos ou condições, consolide as duas informações.
+- Não descarte exigência apenas porque está em anexo.
+- No módulo de riscos, preencha cross_document_findings com complementações e divergências.
+- Só marque conflito quando houver regras, valores ou quantitativos incompatíveis.
+- Não invente informações.
+      `.trim(),
+      input: `DOCUMENTOS DO DOSSIÊ: ${documents.map((d) => `${d.role || d.category || "Anexo"}: ${d.name}`).join(" | ")}\n\nTRECHOS:\n${inputText}`,
+    });
+    const { error: updateError } = await supabase
+      .from("bid_analysis_final_sections")
+      .update({status:"Concluído",section_data:result,error_message:null,completed_at:new Date().toISOString()})
+      .eq("analysis_id",analysisId).eq("section_index",sectionIndex).eq("organization_id",organizationId);
+    if (updateError) throw updateError;
+    return {section_index:sectionIndex,status:"Concluído",documents_searched:documents.length,selected_chunks:relevant.length};
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro no módulo do dossiê.";
+    await supabase.from("bid_analysis_final_sections").update({status:"Erro",error_message:message})
+      .eq("analysis_id",analysisId).eq("section_index",sectionIndex).eq("organization_id",organizationId);
+    throw error;
+  }
+}
+
+async function dossierFinalizeAnalysis(
+  analysisId: string,
+  dossierId: string,
+  context: ApiContext,
+) {
+  const { supabase, organizationId } = context;
+  const analysis = await getAnalysis(analysisId, context);
+  const documents = await getDossierDocuments(dossierId, context);
+  const { data: sections, error } = await supabase
+    .from("bid_analysis_final_sections")
+    .select("section_index,status,section_name,section_data")
+    .eq("analysis_id",analysisId).eq("organization_id",organizationId)
+    .order("section_index",{ascending:true});
+  if (error) throw error;
+  const current = (sections || []).filter((s:any) => String(s.section_name||"").startsWith("dossier_"));
+  if (current.length !== FINAL_SECTION_CONFIG.length) throw new Error(`Foram concluídos ${current.length} de ${FINAL_SECTION_CONFIG.length} módulos.`);
+  if (current.some((s:any)=>s.status!=="Concluído")) throw new Error("Ainda existem módulos pendentes.");
+  const finalAnalysis:any = Object.assign({},...current.map((s:any)=>s.section_data||{}));
+  finalAnalysis.dossier = { id:dossierId,total_documents:documents.length,documents };
+  finalAnalysis.cross_document_findings = finalAnalysis.cross_document_findings || [];
+  const riskLevel = finalAnalysis.risks?.some((r:any)=>r.level==="Alto") ? "Alto" : finalAnalysis.risks?.some((r:any)=>r.level==="Médio") ? "Médio" : "Baixo";
+  const { data:saved,error:saveError } = await supabase.from("bid_analyses").update({
+    status:"Concluído",
+    executive_summary:finalAnalysis.executive_summary||"",
+    extracted_data:finalAnalysis,
+    recommendation:finalAnalysis.participation_recommendation||"Analisar com cautela",
+    risk_level:riskLevel,
+    error_message:null,
+    completed_steps:FINAL_SECTION_CONFIG.length+1,
+    current_step:"Dossiê concluído",
+    completed_at:new Date().toISOString(),
+  }).eq("id",analysisId).select("*,company_documents(name,category)").single();
+  if (saveError) throw saveError;
+  return saved;
 }
 
 async function fastStartAnalysis(
@@ -3179,6 +3521,25 @@ export async function POST(request: NextRequest) {
         },
         500,
       );
+    }
+
+    if (action === "dossier_start") {
+      const dossierId = String(body.dossier_id || "");
+      if (!dossierId) return json({ error: "Selecione um dossiê." },400);
+      return json(await dossierStartAnalysis(dossierId,context));
+    }
+    if (action === "dossier_process_section") {
+      const analysisId = String(body.analysis_id || "");
+      const dossierId = String(body.dossier_id || "");
+      const sectionIndex = Number(body.section_index);
+      if (!analysisId || !dossierId) return json({error:"Análise ou dossiê não informado."},400);
+      return json(await dossierProcessSection(analysisId,dossierId,sectionIndex,apiKey,context));
+    }
+    if (action === "dossier_finalize") {
+      const analysisId = String(body.analysis_id || "");
+      const dossierId = String(body.dossier_id || "");
+      if (!analysisId || !dossierId) return json({error:"Análise ou dossiê não informado."},400);
+      return json({analysis:await dossierFinalizeAnalysis(analysisId,dossierId,context)});
     }
 
     if (action === "fast_start") {

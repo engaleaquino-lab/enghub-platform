@@ -47,6 +47,13 @@ export default function BidAnalyzerPage() {
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [analyses, setAnalyses] = useState<AnalysisRow[]>([]);
   const [selectedDocument, setSelectedDocument] = useState("");
+  const [dossiers, setDossiers] = useState<any[]>([]);
+  const [selectedDossier, setSelectedDossier] = useState("");
+  const [showDossierModal, setShowDossierModal] = useState(false);
+  const [dossierTitle, setDossierTitle] = useState("");
+  const [dossierNotice, setDossierNotice] = useState("");
+  const [dossierDocumentIds, setDossierDocumentIds] = useState<string[]>([]);
+  const [dossierRoles, setDossierRoles] = useState<Record<string,string>>({});
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [creatingBid, setCreatingBid] = useState(false);
@@ -72,6 +79,10 @@ export default function BidAnalyzerPage() {
         ),
       );
 
+      const dossierResponse = await fetch("/api/editais/dossies", { cache: "no-store" });
+      const dossierPayload = await dossierResponse.json();
+      if (!dossierResponse.ok) throw new Error(dossierPayload.error || "Erro ao carregar dossiês.");
+      setDossiers(dossierPayload.dossiers || []);
       setDocuments(eligible);
       setAnalyses((analysisRows.data || []) as AnalysisRow[]);
 
@@ -176,6 +187,35 @@ export default function BidAnalyzerPage() {
     throw new Error(`Falha em ${label}.`);
   }
 
+  function toggleDossierDocument(id:string){
+    setDossierDocumentIds((current)=>current.includes(id)?current.filter((item)=>item!==id):[...current,id]);
+  }
+  async function createDossier(){
+    const response=await fetch("/api/editais/dossies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:dossierTitle,notice_number:dossierNotice,document_ids:dossierDocumentIds,document_roles:dossierRoles})});
+    const payload=await response.json();
+    if(!response.ok) throw new Error(payload.error||"Erro ao criar dossiê.");
+    setShowDossierModal(false); setDossierTitle(""); setDossierNotice(""); setDossierDocumentIds([]); setDossierRoles({});
+    await load(); setSelectedDossier(payload.dossier.id);
+  }
+  async function analyzeDossier(){
+    if(!selectedDossier){setError("Selecione um dossiê.");return;}
+    const labels=["Dados principais","Credenciamento","Habilitação Jurídica","Fiscal e Trabalhista","CREA e CAT","Atestados técnicos","Econômico-Financeira","Declarações e Anexos","Proposta","Garantias, vistoria e prazos","Referências cruzadas e riscos"];
+    try{
+      setLoading(true);setError("");setProgress(0);setProgressLabel("Preparando análise conjunta…");
+      const start=await requestAnalysis({action:"dossier_start",dossier_id:selectedDossier});
+      const analysisId=String(start.analysis_id||""); const total=Number(start.total_sections||labels.length); const concurrency=3; let completed=0;
+      for(let offset=0;offset<total;offset+=concurrency){
+        const indexes=Array.from({length:Math.min(concurrency,total-offset)},(_,i)=>offset+i);
+        setProgressLabel(`Auditando ${start.total_documents} documentos: ${indexes.map((i)=>labels[i]).join(" • ")}…`);
+        await Promise.all(indexes.map((section_index)=>requestStep({action:"dossier_process_section",analysis_id:analysisId,dossier_id:selectedDossier,section_index},labels[section_index])));
+        completed+=indexes.length;setProgress(Math.round(completed/(total+1)*100));
+      }
+      setProgressLabel("Cruzando edital e anexos…");
+      const result=await requestStep({action:"dossier_finalize",analysis_id:analysisId,dossier_id:selectedDossier},"Consolidação do dossiê");
+      setProgress(100);setSelectedAnalysis(result.analysis);setMessage(`Dossiê analisado com ${start.total_documents} documentos.`);await load();
+    }catch(cause:any){setError(cause.message);setMessage("Os módulos concluídos foram preservados.");}finally{setLoading(false);}
+  }
+
   async function analyze() {
     if (!selectedDocument) {
       setError("Selecione um edital da Biblioteca Inteligente.");
@@ -193,7 +233,9 @@ export default function BidAnalyzerPage() {
       "Declarações e Anexos",
       "Proposta, BDI, CPU e encargos sociais",
       "Garantias, vistoria, prazos e execução",
-      "Riscos, itens eliminatórios e checklist",
+      "Riscos e cláusulas de atenção",
+      "Itens eliminatórios",
+      "Checklist e referências cruzadas",
     ];
 
     try {
@@ -282,7 +324,7 @@ export default function BidAnalyzerPage() {
       setSelectedAnalysis(result.analysis);
       setProgressLabel("Análise rápida concluída.");
       setMessage(
-        `Análise concluída com ${totalSections} auditores especializados processados em paralelo.`,
+        `Análise concluída com ${totalSections} auditores especializados, incluindo riscos, eliminatórios e checklist em etapas separadas.`,
       );
 
       await load();
@@ -361,6 +403,20 @@ export default function BidAnalyzerPage() {
           </small>
         </section>
       )}
+
+          <section className="dossier-selector card">
+            <div className="dossier-selector-header">
+              <div><span className="eyebrow">DOSSIÊ DA LICITAÇÃO</span><h3>Analisar edital e anexos juntos</h3><p>Vincule edital, termo de referência, memorial, planilha, cronograma, minuta e demais anexos.</p></div>
+              <button className="secondary-button" onClick={()=>setShowDossierModal(true)} disabled={loading}>Criar dossiê</button>
+            </div>
+            <div className="dossier-actions">
+              <select value={selectedDossier} onChange={(event)=>setSelectedDossier(event.target.value)} disabled={loading}>
+                <option value="">Selecione um dossiê</option>
+                {dossiers.map((dossier)=><option key={dossier.id} value={dossier.id}>{dossier.title} — {dossier.bid_dossier_documents?.length||0} documento(s)</option>)}
+              </select>
+              <button onClick={analyzeDossier} disabled={loading||!selectedDossier}>Analisar dossiê completo</button>
+            </div>
+          </section>
 
       <section className="card bid-analyzer-control">
         <div className="field">
@@ -807,6 +863,14 @@ export default function BidAnalyzerPage() {
                 </section>
               </div>
 
+              <section className="card professional-wide cross-document-section">
+                <div className="section-header"><div><span className="eyebrow">REFERÊNCIAS CRUZADAS</span><h3>Exigências complementadas em outros documentos</h3></div><strong>{data.cross_document_findings?.length||0} ocorrência(s)</strong></div>
+                <div className="cross-document-grid">{(data.cross_document_findings||[]).map((item:any,index:number)=><article className={item.conflict_detected?.toLowerCase()==="sim"?"cross-document-card conflict":"cross-document-card"} key={`cross-${index}`}>
+                  <strong>{item.topic}</strong><span><b>Documento-base:</b> {item.base_document}</span><span><b>Complementado por:</b> {item.complementary_document}</span><p>{item.consolidated_requirement}</p><span><b>Divergência:</b> {item.conflict_detected}</span>{item.conflict_description&&<small>{item.conflict_description}</small>}
+                  <div className="reference-tags">{(item.source_references||[]).map((ref:string,i:number)=><span key={`${ref}-${i}`}>{ref}</span>)}</div>
+                </article>)}</div>
+              </section>
+
               <section className="card professional-wide compliance-matrix">
                 <div className="section-header">
                   <div>
@@ -922,6 +986,21 @@ export default function BidAnalyzerPage() {
           )}
         </main>
       </div>
+      {showDossierModal && (
+        <div className="modal-overlay"><div className="modal dossier-modal">
+          <div className="modal-header"><h2>Criar Dossiê da Licitação</h2><button className="icon-button" onClick={()=>setShowDossierModal(false)}>×</button></div>
+          <label>Nome do dossiê<input value={dossierTitle} onChange={(e)=>setDossierTitle(e.target.value)} placeholder="Ex.: Concorrência 004/2026" /></label>
+          <label>Número do edital/processo<input value={dossierNotice} onChange={(e)=>setDossierNotice(e.target.value)} /></label>
+          <h3>Documentos</h3>
+          <div className="dossier-document-picker">{documents.map((document)=>{const checked=dossierDocumentIds.includes(document.id);return <article key={document.id} className={checked?"selected":""}>
+            <label className="document-check"><input type="checkbox" checked={checked} onChange={()=>toggleDossierDocument(document.id)} /><span><strong>{document.name}</strong><small>{document.category}</small></span></label>
+            {checked&&<select value={dossierRoles[document.id]||""} onChange={(e)=>setDossierRoles((current)=>({...current,[document.id]:e.target.value}))}>
+              <option value="">Tipo</option><option>Edital</option><option>Termo de Referência</option><option>Projeto Básico</option><option>Memorial Descritivo</option><option>Planilha Orçamentária</option><option>Cronograma</option><option>Minuta Contratual</option><option>Declarações/Modelos</option><option>Outro Anexo</option>
+            </select>}
+          </article>})}</div>
+          <button className="btn" onClick={createDossier}>Salvar dossiê</button>
+        </div></div>
+      )}
     </AppShell>
   );
 }
