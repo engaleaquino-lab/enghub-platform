@@ -2578,6 +2578,49 @@ async function dossierStartAnalysis(
   };
 }
 
+
+function dossierRolePriority(role?: string | null) {
+  const normalized = normalizeSearchText(
+    role || "",
+  ).toLowerCase();
+
+  if (normalized.includes("edital")) return 30;
+  if (normalized.includes("termo de referencia")) return 26;
+  if (normalized.includes("projeto basico")) return 14;
+  if (normalized.includes("memorial")) return 12;
+  if (normalized.includes("planilha")) return 10;
+  if (normalized.includes("declaracoes")) return 9;
+  if (normalized.includes("cronograma")) return 7;
+  if (normalized.includes("minuta")) return 6;
+
+  return 3;
+}
+
+function mandatoryChunksByRole(
+  selected: any[],
+  role: string,
+  limit: number,
+) {
+  const normalizedRole = normalizeSearchText(
+    role,
+  ).toLowerCase();
+
+  return selected
+    .filter((chunk) =>
+      normalizeSearchText(
+        chunk.document_role || "",
+      )
+        .toLowerCase()
+        .includes(normalizedRole),
+    )
+    .sort(
+      (a, b) =>
+        b.base_score - a.base_score ||
+        a.chunk_index - b.chunk_index,
+    )
+    .slice(0, limit);
+}
+
 async function dossierProcessSection(
   analysisId: string,
   dossierId: string,
@@ -2619,11 +2662,22 @@ async function dossierProcessSection(
       content: String(chunk.content || ""),
     }));
     for (const chunk of selectRelevantChunks(normalized, sectionIndex)) {
+      const documentRole =
+        document.role || document.category || "Anexo";
+      const baseScore = scoreChunkForSection(
+        chunk.content,
+        FAST_SECTION_KEYWORDS[sectionIndex] || [],
+      );
+
       selected.push({
         ...chunk,
         document_name: document.name,
-        document_role: document.role || document.category || "Anexo",
-        score: scoreChunkForSection(chunk.content, FAST_SECTION_KEYWORDS[sectionIndex] || []),
+        document_role: documentRole,
+        base_score: baseScore,
+        role_priority: dossierRolePriority(documentRole),
+        score:
+          baseScore +
+          dossierRolePriority(documentRole),
       });
     }
   }
@@ -2633,10 +2687,79 @@ async function dossierProcessSection(
       : sectionIndex >= 10
         ? 18
         : 30;
-  const relevant = selected
-    .sort((a,b) => b.score-a.score || a.document_name.localeCompare(b.document_name) || a.chunk_index-b.chunk_index)
-    .slice(0,limit)
-    .sort((a,b) => a.document_name.localeCompare(b.document_name) || a.chunk_index-b.chunk_index);
+  const editalQuota =
+    sectionIndex === 5 || sectionIndex === 8
+      ? 10
+      : 7;
+  const trQuota =
+    sectionIndex === 5 || sectionIndex === 8
+      ? 12
+      : 8;
+
+  const mandatory = [
+    ...mandatoryChunksByRole(
+      selected,
+      "Edital",
+      editalQuota,
+    ),
+    ...mandatoryChunksByRole(
+      selected,
+      "Termo de Referência",
+      trQuota,
+    ),
+  ];
+
+  const mandatoryKeys = new Set(
+    mandatory.map(
+      (chunk) =>
+        `${chunk.document_name}-${chunk.chunk_index}`,
+    ),
+  );
+
+  const complementary = selected
+    .filter(
+      (chunk) =>
+        !mandatoryKeys.has(
+          `${chunk.document_name}-${chunk.chunk_index}`,
+        ),
+    )
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.document_name.localeCompare(
+          b.document_name,
+        ) ||
+        a.chunk_index - b.chunk_index,
+    )
+    .slice(
+      0,
+      Math.max(0, limit - mandatory.length),
+    );
+
+  const relevant = [...mandatory, ...complementary]
+    .filter(
+      (chunk, index, array) =>
+        array.findIndex(
+          (other) =>
+            other.document_name ===
+              chunk.document_name &&
+            other.chunk_index === chunk.chunk_index,
+        ) === index,
+    )
+    .slice(0, limit)
+    .sort(
+      (a, b) =>
+        dossierRolePriority(
+          b.document_role,
+        ) -
+          dossierRolePriority(
+            a.document_role,
+          ) ||
+        a.document_name.localeCompare(
+          b.document_name,
+        ) ||
+        a.chunk_index - b.chunk_index,
+    );
   const inputText = relevant.map((chunk) =>
     `[DOCUMENTO: ${chunk.document_name} | TIPO: ${chunk.document_role} | TRECHO ${chunk.chunk_index+1}]\n${chunk.content}`
   ).join("\n\n").slice(0,52000);
@@ -2669,7 +2792,10 @@ async function dossierProcessSection(
 Você audita uma licitação composta por vários documentos.
 ${config.instructions}
 REGRAS:
-- Trate edital, termo de referência, projeto básico, memorial, planilha, cronograma, minuta e anexos como um único processo.
+- O EDITAL é a fonte principal para regras de participação, credenciamento, habilitação, proposta, prazos e consequências.
+- O TERMO DE REFERÊNCIA é a fonte principal para objeto, escopo, especificações, quantitativos, execução e detalhamento dos atestados.
+- Os demais anexos servem para complementar, confirmar ou apontar divergências.
+- Trate todos os documentos como um único processo, mas nunca substitua uma regra expressa do Edital por inferência de anexo secundário.
 - Sempre identifique Documento + Trecho N na referência.
 - Quando o edital criar a obrigação e outro documento detalhar quantitativos ou condições, consolide as duas informações.
 - Não descarte exigência apenas porque está em anexo.

@@ -63,6 +63,7 @@ const supportedZipExtensions = new Set([
   "jpg",
   "jpeg",
   "webp",
+  "zip",
 ]);
 
 function extensionOf(name: string) {
@@ -89,16 +90,53 @@ function mimeFromName(name: string) {
   return map[extension] || "application/octet-stream";
 }
 
+type ExtractedZipFile = {
+  file: File;
+  relativePath: string;
+  inferredRole: string;
+  depth: number;
+};
+
+function cleanZipPath(value: string) {
+  return value
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+/g, "/")
+    .trim();
+}
+
+function flattenedZipName(relativePath: string) {
+  const clean = cleanZipPath(relativePath);
+  const parts = clean.split("/").filter(Boolean);
+  const fileName = parts.pop() || "arquivo";
+  const folders = parts
+    .map((part) =>
+      part.replace(/[^a-zA-Z0-9._-]/g, "_"),
+    )
+    .filter(Boolean);
+
+  return folders.length
+    ? `${folders.join("__")}__${fileName}`
+    : fileName;
+}
+
 function inferDocumentRole(
   name: string,
   category?: string | null,
 ) {
-  const source = `${name} ${category || ""}`.toLowerCase();
+  const source = `${name} ${category || ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
   if (/edital|concorr[eê]ncia|preg[aã]o/.test(source)) {
     return "Edital";
   }
-  if (/termo.?de.?refer[eê]ncia|\btr\b/.test(source)) {
+  if (
+    /termo.?de.?referencia|termo.?referencia|(^|[\/_. -])tr([\/_. -]|$)/.test(
+      source,
+    )
+  ) {
     return "Termo de Referência";
   }
   if (/projeto.?b[aá]sico/.test(source)) {
@@ -537,8 +575,22 @@ export default function LibraryPage() {
     return payload;
   }
 
-  async function extractZipFiles(zipFile: File) {
-    setUploadProgress("Abrindo arquivo ZIP");
+  async function extractZipFiles(
+    zipFile: File,
+    parentPath = "",
+    depth = 0,
+  ): Promise<ExtractedZipFile[]> {
+    if (depth > 3) {
+      throw new Error(
+        "O ZIP possui mais de 3 níveis de arquivos ZIP internos.",
+      );
+    }
+
+    setUploadProgress(
+      depth === 0
+        ? "Abrindo arquivo ZIP"
+        : `Abrindo ZIP interno: ${zipFile.name}`,
+    );
 
     const zip = await JSZip.loadAsync(
       await zipFile.arrayBuffer(),
@@ -547,39 +599,79 @@ export default function LibraryPage() {
     const entries = Object.values(zip.files).filter(
       (entry) =>
         !entry.dir &&
-        supportedZipExtensions.has(
-          extensionOf(entry.name),
-        ) &&
-        !entry.name.startsWith("__MACOSX/"),
+        !entry.name.startsWith("__MACOSX/") &&
+        !entry.name.split("/").some(
+          (part) => part.startsWith("."),
+        ),
     );
 
     if (!entries.length) {
-      throw new Error(
-        "O ZIP não contém arquivos compatíveis.",
-      );
+      return [];
     }
 
-    const files: File[] = [];
+    const extracted: ExtractedZipFile[] = [];
 
-    for (let index = 0; index < entries.length; index += 1) {
+    for (
+      let index = 0;
+      index < entries.length;
+      index += 1
+    ) {
       const entry = entries[index];
-      setUploadProgress(
-        `Extraindo ${index + 1} de ${entries.length}: ${entry.name}`,
+      const entryPath = cleanZipPath(
+        parentPath
+          ? `${parentPath}/${entry.name}`
+          : entry.name,
       );
+      const extension = extensionOf(entry.name);
+
+      setUploadProgress(
+        `Extraindo ${index + 1} de ${entries.length}: ${entryPath}`,
+      );
+
+      if (extension === "zip") {
+        const nestedBlob = await entry.async("blob");
+        const nestedFile = new File(
+          [nestedBlob],
+          entry.name.split("/").pop() || "anexo.zip",
+          { type: "application/zip" },
+        );
+
+        const nestedParent = entryPath.replace(
+          /\\.zip$/i,
+          "",
+        );
+
+        const nestedFiles = await extractZipFiles(
+          nestedFile,
+          nestedParent,
+          depth + 1,
+        );
+
+        extracted.push(...nestedFiles);
+        continue;
+      }
+
+      if (!supportedZipExtensions.has(extension)) {
+        continue;
+      }
 
       const blob = await entry.async("blob");
-      const cleanName =
-        entry.name.split("/").pop() || entry.name;
+      const role = inferDocumentRole(entryPath);
+      const fileName = flattenedZipName(entryPath);
 
-      files.push(
-        new File([blob], cleanName, {
-          type: mimeFromName(cleanName),
+      extracted.push({
+        file: new File([blob], fileName, {
+          type: mimeFromName(fileName),
         }),
-      );
+        relativePath: entryPath,
+        inferredRole: role,
+        depth,
+      });
     }
 
-    return files;
+    return extracted;
   }
+
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -628,6 +720,12 @@ export default function LibraryPage() {
         const extractedFiles =
           await extractZipFiles(file);
 
+        if (!extractedFiles.length) {
+          throw new Error(
+            "Nenhum arquivo compatível foi localizado no ZIP ou em suas subpastas.",
+          );
+        }
+
         const uploaded: any[] = [];
 
         for (
@@ -635,30 +733,52 @@ export default function LibraryPage() {
           index < extractedFiles.length;
           index += 1
         ) {
-          const internalFile = extractedFiles[index];
+          const extracted = extractedFiles[index];
 
           setMessage(
-            `Importando arquivo ${index + 1} de ${extractedFiles.length}: ${internalFile.name}`,
+            `Importando arquivo ${index + 1} de ${extractedFiles.length}: ${extracted.relativePath}`,
           );
 
           const payload = await uploadOneFile(
-            internalFile,
+            extracted.file,
             {
               ...commonOptions,
-              category: "",
+              category: extracted.inferredRole,
+              description: [
+                commonOptions.description,
+                `Origem no ZIP: ${extracted.relativePath}`,
+              ]
+                .filter(Boolean)
+                .join("\n"),
               autoAnalyze: false,
               storageFolder: "library/zip",
             },
           );
 
-          uploaded.push(payload.document);
+          uploaded.push({
+            ...payload.document,
+            zip_relative_path: extracted.relativePath,
+            inferred_role: extracted.inferredRole,
+          });
         }
 
         const editalDocuments = uploaded.filter(
           (document) =>
-            String(document.category || "")
-              .toLowerCase()
-              .includes("edital"),
+            document.inferred_role === "Edital" ||
+            inferDocumentRole(
+              document.zip_relative_path || document.name,
+              document.category,
+            ) === "Edital",
+        );
+
+        const referenceDocuments = uploaded.filter(
+          (document) =>
+            document.inferred_role ===
+              "Termo de Referência" ||
+            inferDocumentRole(
+              document.zip_relative_path || document.name,
+              document.category,
+            ) === "Termo de Referência",
         );
 
         if (
@@ -673,10 +793,12 @@ export default function LibraryPage() {
           const roles = Object.fromEntries(
             uploaded.map((document) => [
               document.id,
-              inferDocumentRole(
-                document.name,
-                document.category,
-              ),
+              document.inferred_role ||
+                inferDocumentRole(
+                  document.zip_relative_path ||
+                    document.name,
+                  document.category,
+                ),
             ]),
           );
 
@@ -725,7 +847,7 @@ export default function LibraryPage() {
           );
 
           setMessage(
-            `ZIP processado: ${uploaded.length} documentos indexados e dossiê analisado automaticamente.`,
+            `ZIP processado: ${uploaded.length} documentos indexados, incluindo ${editalDocuments.length} edital(is) e ${referenceDocuments.length} termo(s) de referência. Dossiê analisado automaticamente.`,
           );
         } else if (
           autoAnalyze &&
@@ -933,9 +1055,9 @@ export default function LibraryPage() {
               required
             />
             <span className="muted">
-              PDF, DOCX, Excel, CSV, texto, imagem ou ZIP. Em um ZIP,
-              cada arquivo compatível será extraído, indexado e vinculado
-              automaticamente ao mesmo dossiê quando houver edital.
+              PDF, DOCX, Excel, CSV, texto, imagem ou ZIP. O EngHub
+              percorre subpastas e ZIPs internos, preserva o caminho de origem
+              e prioriza Edital e Termo de Referência na análise.
             </span>
           </div>
 
