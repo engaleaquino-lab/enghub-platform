@@ -577,3 +577,156 @@ select.input{appearance:auto}
     justify-content:flex-start;
   }
 }
+
+
+/* Sprint 30 — Cadastro Inteligente da Empresa */
+.company-registry-kpis{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:12px;
+  margin-bottom:16px;
+}
+.company-registry-kpis article{
+  display:grid;
+  gap:6px;
+}
+.company-registry-kpis span{color:var(--muted);font-size:.82rem}
+.company-registry-kpis strong{font-size:1.7rem;color:var(--text)}
+.registry-tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:16px;
+}
+.registry-tabs button{
+  padding:10px 14px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:#061522;
+  color:var(--muted);
+  cursor:pointer;
+}
+.registry-tabs button.active{
+  border-color:var(--green);
+  color:var(--green);
+  background:#0c2b23;
+}
+.registry-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+}
+.registry-card{
+  display:grid;
+  align-content:start;
+  gap:13px;
+}
+.registry-card-header{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+.registry-card-header h3{margin:4px 0 0}
+.registry-card dl{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin:0;
+}
+.registry-card dl div{
+  display:grid;
+  gap:3px;
+}
+.registry-card dt{color:var(--muted);font-size:.76rem}
+.registry-card dd{margin:0;color:var(--text)}
+.registry-status{
+  padding:5px 8px;
+  border-radius:999px;
+  font-size:.74rem;
+  font-weight:800;
+  white-space:nowrap;
+}
+.registry-status.success,.comparison-status.success{
+  color:#8ff0cb;background:#17392f;
+}
+.registry-status.warning,.comparison-status.warning{
+  color:#ffd18a;background:#3a260d;
+}
+.registry-status.danger,.comparison-status.danger{
+  color:#ffaaaa;background:#3a1717;
+}
+.registry-status.neutral{color:var(--muted);background:#13202a}
+.registry-actions{
+  display:flex;
+  gap:8px;
+  margin-top:auto;
+}
+.registry-service{
+  margin:0;
+  padding:10px;
+  border-left:3px solid var(--green);
+  background:#061522;
+  color:var(--text);
+}
+.registry-modal{
+  width:min(820px,94vw);
+  max-height:90vh;
+  overflow:auto;
+}
+.registry-form{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.registry-form label{
+  display:grid;
+  gap:6px;
+}
+.registry-form .full{grid-column:1/-1}
+.company-comparison{margin-top:16px}
+.company-comparison .section-header{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  align-items:flex-start;
+  margin-bottom:14px;
+}
+.company-comparison .section-header h3{margin:4px 0 0}
+.company-comparison .section-header>strong{color:var(--green)}
+.comparison-kpis{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin-bottom:14px;
+}
+.comparison-kpis article{
+  display:grid;
+  gap:4px;
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:#061522;
+}
+.comparison-kpis span{color:var(--muted);font-size:.8rem}
+.comparison-kpis strong{font-size:1.4rem}
+.comparison-status{
+  display:inline-flex;
+  padding:5px 8px;
+  border-radius:999px;
+  font-size:.75rem;
+  font-weight:800;
+}
+.company-comparison td strong{display:block}
+.company-comparison td small{display:block;color:var(--muted);margin-top:4px}
+@media(max-width:1100px){
+  .company-registry-kpis{grid-template-columns:repeat(3,1fr)}
+  .registry-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:720px){
+  .company-registry-kpis,
+  .registry-grid,
+  .comparison-kpis,
+  .registry-form{grid-template-columns:1fr}
+  .registry-form .full{grid-column:auto}
+}

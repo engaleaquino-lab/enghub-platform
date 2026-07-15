@@ -17,6 +17,7 @@ export default function Sidebar() {
         <Link href="/editais">Leitor de Editais</Link>
         <Link href="/conhecimento">Conhecimento</Link>
         <Link href="/equipe">Equipe</Link>
+        <Link href="/empresa">Cadastro Inteligente</Link>
         <Link href="/perfil">Perfil da empresa</Link>
         <Link href="/admin">Administração</Link>
         <Link href="/">Início</Link>

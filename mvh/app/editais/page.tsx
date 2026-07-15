@@ -61,6 +61,8 @@ export default function BidAnalyzerPage() {
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
+  const [companyComparison, setCompanyComparison] = useState<any>(null);
+  const [comparingCompany, setComparingCompany] = useState(false);
 
   async function load() {
     try {
@@ -358,6 +360,43 @@ export default function BidAnalyzerPage() {
       setProgressLabel("");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function compareWithCompany() {
+    if (!selectedAnalysis?.id) {
+      setError("Selecione uma análise concluída.");
+      return;
+    }
+
+    try {
+      setComparingCompany(true);
+      setError("");
+
+      const response = await fetch(
+        "/api/empresa/comparar",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            analysis_id: selectedAnalysis.id,
+          }),
+        },
+      );
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error || "Falha na comparação.",
+        );
+      }
+
+      setCompanyComparison(payload);
+    } catch (cause: any) {
+      setError(cause.message);
+    } finally {
+      setComparingCompany(false);
     }
   }
 
@@ -835,6 +874,97 @@ export default function BidAnalyzerPage() {
                   <div className="reference-tags">{(item.source_references||[]).map((ref:string,i:number)=><span key={`${ref}-${i}`}>{ref}</span>)}</div>
                 </article>)}</div>
               </section>
+
+              {companyComparison && (
+                <section className="card professional-wide company-comparison">
+                  <div className="section-header">
+                    <div>
+                      <span className="eyebrow">
+                        COMPATIBILIDADE DA EMPRESA
+                      </span>
+                      <h3>
+                        O cadastro atual atende ao edital?
+                      </h3>
+                    </div>
+                    <strong>
+                      {companyComparison.summary?.atende || 0}/{
+                        companyComparison.summary?.total || 0
+                      } atendidos
+                    </strong>
+                  </div>
+
+                  <div className="comparison-kpis">
+                    <article>
+                      <span>Atende</span>
+                      <strong>
+                        {companyComparison.summary?.atende || 0}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Faltando</span>
+                      <strong>
+                        {companyComparison.summary?.faltando || 0}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Vencidos</span>
+                      <strong>
+                        {companyComparison.summary?.vencido || 0}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Insuficientes</span>
+                      <strong>
+                        {companyComparison.summary?.insuficiente || 0}
+                      </strong>
+                    </article>
+                  </div>
+
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Status</th>
+                          <th>Categoria</th>
+                          <th>Exigência</th>
+                          <th>Cadastro localizado</th>
+                          <th>Diagnóstico</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(companyComparison.items || []).map(
+                          (item: any, index: number) => (
+                            <tr key={`company-match-${index}`}>
+                              <td>
+                                <span
+                                  className={`comparison-status ${
+                                    item.status === "Atende"
+                                      ? "success"
+                                      : item.status === "Vencido"
+                                        ? "danger"
+                                        : "warning"
+                                  }`}
+                                >
+                                  {item.status}
+                                </span>
+                              </td>
+                              <td>{item.category}</td>
+                              <td>
+                                <strong>{item.requirement}</strong>
+                                {item.reference && (
+                                  <small>{item.reference}</small>
+                                )}
+                              </td>
+                              <td>{item.matched_item || "—"}</td>
+                              <td>{item.detail}</td>
+                            </tr>
+                          ),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
 
               <section className="card professional-wide compliance-matrix">
                 <div className="section-header">
