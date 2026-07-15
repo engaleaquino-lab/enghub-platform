@@ -174,6 +174,10 @@ export default function LibraryPage() {
   const [message, setMessage] = useState("");
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisLabel, setAnalysisLabel] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteText, setBulkDeleteText] = useState("");
+  const [deleteAllMode, setDeleteAllMode] = useState(false);
 
   async function load() {
     try {
@@ -182,8 +186,17 @@ export default function LibraryPage() {
         listRows("company_documents"),
         listRows("contracts"),
       ]);
-      setDocuments(documentRows as LibraryDocument[]);
+      const loadedDocuments = documentRows as LibraryDocument[];
+      setDocuments(loadedDocuments);
       setContracts(contractRows);
+      setSelectedIds((current) => {
+        const validIds = new Set(
+          loadedDocuments.map((item) => item.id),
+        );
+        return new Set(
+          Array.from(current).filter((id) => validIds.has(id)),
+        );
+      });
     } catch (cause: any) {
       setError(cause.message);
     }
@@ -211,6 +224,149 @@ export default function LibraryPage() {
       return (!term || haystack.includes(term)) && (!category || item.category === category);
     });
   }, [documents, contractMap, search, category]);
+
+  const selectedDocuments = useMemo(
+    () => documents.filter((item) => selectedIds.has(item.id)),
+    [documents, selectedIds],
+  );
+
+  const allFilteredSelected =
+    filtered.length > 0 &&
+    filtered.every((item) => selectedIds.has(item.id));
+
+  function toggleDocumentSelection(
+    documentId: string,
+    checked?: boolean,
+  ) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      const shouldSelect =
+        typeof checked === "boolean"
+          ? checked
+          : !next.has(documentId);
+
+      if (shouldSelect) next.add(documentId);
+      else next.delete(documentId);
+
+      return next;
+    });
+  }
+
+  function toggleAllFiltered() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+
+      if (allFilteredSelected) {
+        filtered.forEach((item) => next.delete(item.id));
+      } else {
+        filtered.forEach((item) => next.add(item.id));
+      }
+
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function openBulkDelete(allDocuments = false) {
+    if (!allDocuments && selectedIds.size === 0) return;
+    setDeleteAllMode(allDocuments);
+    setBulkDeleteText("");
+    setBulkDeleteOpen(true);
+  }
+
+  async function removeStoragePaths(paths: string[]) {
+    const storage = supabaseBrowser().storage.from("contract-files");
+
+    for (let index = 0; index < paths.length; index += 100) {
+      const batch = paths.slice(index, index + 100);
+      if (!batch.length) continue;
+
+      const { error } = await storage.remove(batch);
+      if (error) {
+        console.warn("Arquivos físicos não removidos:", error.message);
+      }
+    }
+  }
+
+  async function confirmBulkDelete() {
+    if (bulkDeleteText.trim().toUpperCase() !== "APAGAR") {
+      setError('Digite APAGAR para confirmar a exclusão.');
+      return;
+    }
+
+    const targets = deleteAllMode
+      ? documents
+      : selectedDocuments;
+
+    if (!targets.length) {
+      setBulkDeleteOpen(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      setMessage(
+        `Excluindo ${targets.length} documento(s) da Biblioteca…`,
+      );
+
+      const ids = targets.map((item) => item.id);
+      const paths = targets
+        .map((item) => item.storage_path)
+        .filter((value): value is string => Boolean(value));
+      const s = supabaseBrowser();
+
+      // company_documents possui cascata para chunks, análises
+      // e vínculos com dossiês.
+      for (let index = 0; index < ids.length; index += 100) {
+        const batch = ids.slice(index, index + 100);
+        const { error } = await s
+          .from("company_documents")
+          .delete()
+          .in("id", batch);
+
+        if (error) throw error;
+      }
+
+      await removeStoragePaths(paths);
+
+      // Remove dossiês que ficaram vazios após a exclusão.
+      const { data: dossiers } = await s
+        .from("bid_dossiers")
+        .select("id,bid_dossier_documents(id)");
+
+      const emptyDossierIds = (dossiers || [])
+        .filter(
+          (dossier: any) =>
+            !dossier.bid_dossier_documents?.length,
+        )
+        .map((dossier: any) => dossier.id);
+
+      if (emptyDossierIds.length) {
+        await s
+          .from("bid_dossiers")
+          .delete()
+          .in("id", emptyDossierIds);
+      }
+
+      clearSelection();
+      setSelected(null);
+      setBulkDeleteOpen(false);
+      setBulkDeleteText("");
+      setMessage(
+        `${targets.length} documento(s) excluído(s) definitivamente.`,
+      );
+      await load();
+    } catch (cause: any) {
+      setError(cause.message);
+      setMessage("");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const alerts = useMemo(() => {
     const now = new Date();
@@ -1018,30 +1174,162 @@ export default function LibraryPage() {
           </select>
         </div>
 
+        <div className="library-bulk-toolbar">
+          <label className="library-select-all">
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              onChange={toggleAllFiltered}
+              disabled={!filtered.length || loading}
+            />
+            <span>
+              {allFilteredSelected
+                ? "Desmarcar resultados"
+                : `Selecionar todos os ${filtered.length} resultado(s)`}
+            </span>
+          </label>
+
+          <div className="library-bulk-actions">
+            <strong>{selectedIds.size} selecionado(s)</strong>
+            <button
+              className="btn danger"
+              type="button"
+              onClick={() => openBulkDelete(false)}
+              disabled={!selectedIds.size || loading}
+            >
+              Excluir selecionados
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={clearSelection}
+              disabled={!selectedIds.size || loading}
+            >
+              Cancelar seleção
+            </button>
+            <button
+              className="btn library-clear-button"
+              type="button"
+              onClick={() => openBulkDelete(true)}
+              disabled={!documents.length || loading}
+            >
+              Limpar toda a Biblioteca
+            </button>
+          </div>
+        </div>
+
         <div className="library-grid">
           {filtered.map((item) => {
             const contract = contractMap.get(item.contract_id || "");
             return (
-              <button className="library-card" key={item.id} onClick={() => setSelected(item)}>
-                <div className="library-card-head">
-                  <span className="library-icon">{item.category === "Planilha/Orçamento" ? "▦" : "▤"}</span>
-                  <span className={`library-status ${item.status === "Vencido" ? "expired" : ""}`}>{item.status || "Válido"}</span>
+              <article
+                className={`library-card ${
+                  selectedIds.has(item.id) ? "selected" : ""
+                }`}
+                key={item.id}
+              >
+                <div className="library-card-selection">
+                  <label
+                    onClick={(event) => event.stopPropagation()}
+                    title="Selecionar documento"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={(event) =>
+                        toggleDocumentSelection(
+                          item.id,
+                          event.target.checked,
+                        )
+                      }
+                    />
+                  </label>
                 </div>
-                <strong>{item.name}</strong>
-                <span className="chip">{item.category || "Documento geral"}</span>
-                <p>{item.summary || "Sem resumo disponível."}</p>
-                <div className="file-meta">
-                  <span>{contract?.contract_number || "Empresa"}</span>
-                  <span>{fileSize(item.file_size)}</span>
-                  <span>{dateBR(item.created_at)}</span>
-                </div>
-              </button>
+
+                <button
+                  type="button"
+                  className="library-card-content"
+                  onClick={() => setSelected(item)}
+                >
+                  <div className="library-card-head">
+                    <span className="library-icon">{item.category === "Planilha/Orçamento" ? "▦" : "▤"}</span>
+                    <span className={`library-status ${item.status === "Vencido" ? "expired" : ""}`}>{item.status || "Válido"}</span>
+                  </div>
+                  <strong>{item.name}</strong>
+                  <span className="chip">{item.category || "Documento geral"}</span>
+                  <p>{item.summary || "Sem resumo disponível."}</p>
+                  <div className="file-meta">
+                    <span>{contract?.contract_number || "Empresa"}</span>
+                    <span>{fileSize(item.file_size)}</span>
+                    <span>{dateBR(item.created_at)}</span>
+                  </div>
+                </button>
+              </article>
             );
           })}
 
           {!filtered.length && <div className="empty">Nenhum documento encontrado.</div>}
         </div>
       </section>
+
+      <Modal
+        open={bulkDeleteOpen}
+        title={
+          deleteAllMode
+            ? "Limpar toda a Biblioteca"
+            : "Excluir documentos selecionados"
+        }
+        onClose={() => !loading && setBulkDeleteOpen(false)}
+      >
+        <div className="bulk-delete-confirmation">
+          <div className="warning">
+            <strong>
+              {deleteAllMode
+                ? `Você excluirá todos os ${documents.length} documentos da organização.`
+                : `Você excluirá ${selectedDocuments.length} documento(s).`}
+            </strong>
+            <p>
+              A ação removerá os arquivos, trechos indexados, análises e
+              vínculos com dossiês. Não será possível desfazer.
+            </p>
+          </div>
+
+          <label className="field">
+            <span>Digite APAGAR para confirmar</span>
+            <input
+              className="input"
+              value={bulkDeleteText}
+              onChange={(event) =>
+                setBulkDeleteText(event.target.value)
+              }
+              placeholder="APAGAR"
+              autoFocus
+            />
+          </label>
+
+          <div className="modal-actions">
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => setBulkDeleteOpen(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn danger"
+              type="button"
+              onClick={confirmBulkDelete}
+              disabled={
+                loading ||
+                bulkDeleteText.trim().toUpperCase() !== "APAGAR"
+              }
+            >
+              {loading ? "Excluindo…" : "Excluir definitivamente"}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={open} title="Adicionar à Biblioteca Inteligente" onClose={() => !loading && setOpen(false)}>
         <form className="form-grid" onSubmit={upload}>
